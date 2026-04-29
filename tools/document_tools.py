@@ -89,6 +89,23 @@ def _read_docx(path: str) -> str:
 
 # ── LLM generation ────────────────────────────────────────────────────────────
 
+def _popular_keywords_rule(popular_keywords: list[str] | None) -> str:
+    """Build the skills-filter rule injected into the CV prompt."""
+    if not popular_keywords:
+        return (
+            "   - Include ALL relevant skills from the JD, even if not in Ethan's CV.\n"
+        )
+    kw_list = ", ".join(popular_keywords)
+    return (
+        f"   - APPROVED KEYWORD LIST (from market-wide keyword library — appear in 2+ JDs):\n"
+        f"     {kw_list}\n"
+        f"   - Only include skills/keywords from this approved list OR from Ethan's original CV.\n"
+        f"   - Do NOT add niche, company-specific jargon from this JD that is not on the approved list\n"
+        f"     (e.g. one-off phrases like 'thinking in bets', 'thin/vertical slicing', 'test-learn-iterate'\n"
+        f"     should only appear if they are already in the approved list above).\n"
+    )
+
+
 def generate_tailored_cv(
     cv_text: str,
     job_description: str,
@@ -96,6 +113,7 @@ def generate_tailored_cv(
     company: str,
     client: OpenAI,
     model: str,
+    popular_keywords: list[str] | None = None,
 ) -> dict:
     """Ask the LLM for tailored CV sections. Returns a dict with work_experience, projects, skills."""
     prompt = f"""You are an expert CV writer tailoring Ethan Lai's CV for a specific job.
@@ -110,16 +128,29 @@ Return ONLY a valid JSON object — no markdown fences, no explanation — match
     {{"name": "project name", "subtitle": "role label", "dates": "date range", "bullets": ["bullet 1", "bullet 2"]}}
   ],
   "skills": {{
-    "proficiency": "comma-separated proficiencies most relevant to the JD",
-    "tools": "comma-separated tools most relevant to the JD"
+    "proficiency": "comma-separated list of competencies",
+    "tools": "comma-separated list of tools"
   }}
 }}
 
-STRICT RULES:
-1. work_experience: include ALL 4 jobs (TUI UK, Inspectorio, FPT Software, Carousell), newest first.
-   For each job, pick exactly 3-5 bullets from the ORIGINAL CV that best match the JD keywords.
-   Use the EXACT bullet text — do NOT rewrite or invent.
-2. projects: include EXACTLY these 2 projects in this order:
+RULES:
+
+1. work_experience — include ALL 4 jobs (TUI UK, Inspectorio, FPT Software, Carousell), newest first.
+   - Select 3–5 bullets per job that best match the JD.
+   - ALWAYS preserve the original metric/outcome (€ amount, %, hours saved, etc.) — never strip numbers.
+   - Keep the original sentence structure; you may:
+       • swap a word for a JD keyword (e.g. "iterative" → "test-learn-iterate", "data" → "data-driven")
+       • insert a JD keyword phrase mid-sentence (e.g. "…via Continuous Discovery", "…using Agile sprints")
+   - NEVER append "…demonstrating/reflecting/showcasing/highlighting X" at the end — forbidden.
+   - Do NOT truncate bullets to just an action verb without context or metric.
+   - Do NOT invent metrics, companies, or outcomes not in the original CV.
+   - Do NOT fabricate bullets — only use or adapt bullets that literally exist in the original CV.
+     Carousell has EXACTLY 2 bullets in the original. Do not add a third.
+   - Only weave in a JD keyword if it fits naturally. If it sounds forced, leave that bullet unchanged.
+   - Target style: "Drove €1.6M revenue by launching global booking fee across 5 microservices via test-learn-iterate"
+                   "Designed AI-powered personalisation engine via Continuous Discovery, boosting CTR 15% & conversion 3%"
+
+2. projects — include EXACTLY these 2 projects in this order (use verbatim):
    First: {{"name": "Job Application AI Multi-Agent Workflow", "subtitle": "Vibe Coding", "dates": "Apr 2025",
      "bullets": [
        "Built a multi-agent Python system orchestrating LinkedIn job search, Google Sheets tracking, tailored CV/cover letter generation, and automated form filling via Playwright and Groq LLM",
@@ -130,7 +161,14 @@ STRICT RULES:
        "Shaped the product vision and conducted qualitative & quantitative market research to identify target audience",
        "Developed a user pilot plan including A/B tests on hypotheses of nice-to-have features"
      ]}}
-3. skills: select the most relevant subset from the original CV skills, reordered to highlight JD keywords first.
+
+3. skills — this is CRITICAL:
+   - Read the FULL job description carefully and extract relevant skills, methodologies, frameworks, and tools.
+   - Merge with Ethan's existing skills, placing JD-matched skills first.
+   - "proficiency" = methodologies, frameworks, soft skills, PM competencies
+   - "tools" = named software tools and platforms from both the JD and Ethan's original CV
+   - Keep each value (proficiency / tools) to ONE compact comma-separated line — no repetition, no padding
+{_popular_keywords_rule(popular_keywords)}
 4. Return ONLY the JSON — nothing else.
 
 ETHAN'S ORIGINAL CV:
@@ -140,12 +178,12 @@ TARGET ROLE:
 Title: {job_title}
 Company: {company}
 
-Job Description (first 2500 chars):
-{job_description[:2500]}"""
+Full Job Description:
+{job_description}"""
 
     response = client.chat.completions.create(
         model=model,
-        max_tokens=2500,
+        max_tokens=3500,
         messages=[
             {"role": "system", "content": "Return only valid JSON. No markdown fences."},
             {"role": "user", "content": prompt},
@@ -219,29 +257,29 @@ def render_cv_pdf(sections: dict, output_path: str) -> str:
     doc = SimpleDocTemplate(
         output_path,
         pagesize=A4,
-        leftMargin=45,
-        rightMargin=45,
-        topMargin=32,
-        bottomMargin=28,
+        leftMargin=38,
+        rightMargin=38,
+        topMargin=28,
+        bottomMargin=24,
     )
 
-    W = A4[0] - 90  # usable content width
+    W = A4[0] - 76  # usable content width
 
     def s(name, **kw):
-        defaults = dict(fontName="Helvetica", fontSize=9, leading=11)
+        defaults = dict(fontName="Helvetica", fontSize=8.8, leading=10.5)
         defaults.update(kw)
         return ParagraphStyle(name, **defaults)
 
     name_s    = s("Name", fontName="Helvetica-Bold", fontSize=15, leading=19,
                   alignment=TA_CENTER, spaceAfter=1)
-    contact_s = s("Contact", fontSize=8, leading=10, alignment=TA_CENTER, spaceAfter=4)
-    section_s = s("Section", fontName="Helvetica-Bold", fontSize=9.5, leading=12,
-                  spaceBefore=5, spaceAfter=1)
-    title_s   = s("Title", fontName="Helvetica-Bold", fontSize=9, leading=11)
-    dates_s   = s("Dates", fontSize=8.5, leading=11, alignment=TA_RIGHT)
-    bullet_s  = s("Bullet", fontSize=8.5, leading=11, leftIndent=10, spaceAfter=0.5)
-    edu_s     = s("Edu", fontName="Helvetica-Bold", fontSize=9, leading=11)
-    edu_det_s = s("EduDet", fontSize=8.5, leading=11, leftIndent=10, spaceAfter=2)
+    contact_s = s("Contact", fontSize=7.8, leading=9.5, alignment=TA_CENTER, spaceAfter=3)
+    section_s = s("Section", fontName="Helvetica-Bold", fontSize=9.2, leading=11,
+                  spaceBefore=4, spaceAfter=1)
+    title_s   = s("Title", fontName="Helvetica-Bold", fontSize=8.8, leading=10.5)
+    dates_s   = s("Dates", fontSize=8.2, leading=10.5, alignment=TA_RIGHT)
+    bullet_s  = s("Bullet", fontSize=8.2, leading=10.5, leftIndent=9, spaceAfter=0.3)
+    edu_s     = s("Edu", fontName="Helvetica-Bold", fontSize=8.8, leading=10.5)
+    edu_det_s = s("EduDet", fontSize=8.2, leading=10.5, leftIndent=9, spaceAfter=1.5)
 
     story = []
 
@@ -282,7 +320,7 @@ def render_cv_pdf(sections: dict, output_path: str) -> str:
         label = f"{job['title']} - {job['company']}"
         title_row(label, job.get("dates", ""))
         add_bullets(job.get("bullets", []))
-        story.append(Spacer(1, 3))
+        story.append(Spacer(1, 2))
 
     # ── Project Experience ────────────────────────────────────────────────────
     section_header("PROJECT EXPERIENCE")
@@ -292,7 +330,7 @@ def render_cv_pdf(sections: dict, output_path: str) -> str:
             label = f"{proj['subtitle']} - {proj['name']}"
         title_row(label, proj.get("dates", ""))
         add_bullets(proj.get("bullets", []))
-        story.append(Spacer(1, 3))
+        story.append(Spacer(1, 2))
 
     # ── Education (fixed) ────────────────────────────────────────────────────
     section_header("EDUCATION")

@@ -1,0 +1,165 @@
+{
+  "metadata": {
+    "last_updated": "2026-04-29",
+    "total_jds_processed": 21,
+    "popularity_threshold": 2
+  },
+  "keywords": {
+    "KPIs": {
+      "category": "methodology",
+      "count": 4
+    },
+    "Roadmapping": {
+      "category": "skill",
+      "count": 17
+    },
+    "Prioritisation": {
+      "category": "skill",
+      "count": 14
+    },
+    "Cross-functional collaboration": {
+      "category": "skill",
+      "count": 11
+    },
+    "Metrics & success criteria": {
+      "category": "skill",
+      "count": 7
+    },
+    "Problem definition": {
+      "category": "skill",
+      "count": 1
+    },
+    "Hypothesis validation": {
+      "category": "skill",
+      "count": 1
+    },
+    "Agile": {
+      "category": "methodology",
+      "count": 12
+    },
+    "JTBD": {
+      "category": "methodology",
+      "count": 1
+    },
+    "Continuous Discovery": {
+      "category": "methodology",
+      "count": 1
+    },
+    "CI/CD": {
+      "category": "methodology",
+      "count": 1
+    },
+    "Stakeholder management": {
+      "category": "skill",
+      "count": 11
+    },
+    "User research": {
+      "category": "skill",
+      "count": 5
+    },
+    "Requirements definition": {
+      "category": "skill",
+      "count": 9
+    },
+    "Experimentation": {
+      "category": "practice",
+      "count": 5
+    },
+    "Data-driven decision-making": {
+      "category": "practice",
+      "count": 3
+    },
+    "UX design": {
+      "category": "practice",
+      "count": 6
+    },
+    "Growth hacking": {
+      "category": "practice",
+      "count": 1
+    },
+    "AI/ML products": {
+      "category": "domain",
+      "count": 6
+    },
+    "Go-to-market": {
+      "category": "skill",
+      "count": 3
+    },
+    "Fintech": {
+      "category": "domain",
+      "count": 2
+    },
+    "Payments": {
+      "category": "domain",
+      "count": 6
+    },
+    "B2B SaaS": {
+      "category": "domain",
+      "count": 3
+    },
+    "Scrum": {
+      "category": "methodology",
+      "count": 1
+    },
+    "OKRs": {
+      "category": "methodology",
+      "count": 2
+    },
+    "Product strategy": {
+      "category": "skill",
+      "count": 10
+    },
+    "Prototyping": {
+      "category": "practice",
+      "count": 1
+    },
+    "Backlog management": {
+      "category": "skill",
+      "count": 5
+    },
+    "A/B testing": {
+      "category": "practice",
+      "count": 1
+    },
+    "User journey mapping": {
+      "category": "practice",
+      "count": 4
+    },
+    "Jira": {
+      "category": "tool",
+      "count": 1
+    },
+    "Figma": {
+      "category": "tool",
+      "count": 1
+    },
+    "Google Analytics": {
+      "category": "tool",
+      "count": 1
+    },
+    "E-commerce": {
+      "category": "domain",
+      "count": 1
+    },
+    "Product discovery": {
+      "category": "skill",
+      "count": 1
+    },
+    "Mobile": {
+      "category": "domain",
+      "count": 2
+    },
+    "Design Thinking": {
+      "category": "methodology",
+      "count": 1
+    },
+    "Intercom": {
+      "category": "tool",
+      "count": 1
+    },
+    "Lean": {
+      "category": "methodology",
+      "count": 1
+    }
+  }
+}

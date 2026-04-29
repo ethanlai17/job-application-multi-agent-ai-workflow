@@ -162,6 +162,10 @@ class JobUnavailableError(Exception):
     pass
 
 
+class RecruiterJobError(Exception):
+    pass
+
+
 async def get_job_details(session: BrowserSession, url: str) -> dict:
     """Navigate to a LinkedIn job page and extract full job description + salary.
 
@@ -223,6 +227,23 @@ async def get_job_details(session: BrowserSession, url: str) -> dict:
     # Skip jobs with no description — likely invalid/removed
     if not description:
         raise JobUnavailableError(f"Empty job description (removed or invalid): {url}")
+
+    # Skip jobs posted by staffing/recruitment agencies
+    recruiter_signals = [
+        "staffing and recruiting",
+        "staffing & recruiting",
+        "recruitment agency",
+        "recruiting firm",
+        "executive search",
+        "talent acquisition firm",
+        "we are a recruiter",
+        "our client is",
+        "on behalf of our client",
+        "our client, a",
+    ]
+    page_lower = page_text.lower()
+    if any(sig in page_lower for sig in recruiter_signals):
+        raise RecruiterJobError(f"Recruiter/staffing posting skipped: {url}")
 
     try:
         salary_el = await session.page.query_selector(".job-details-jobs-unified-top-card__job-insight span")

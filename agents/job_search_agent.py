@@ -5,7 +5,7 @@ from browser.session import BrowserSession
 from config.settings import Config
 from models.job import JobListing
 from tools import playwright_tools, sheets_tools
-from tools.playwright_tools import JobUnavailableError
+from tools.playwright_tools import JobUnavailableError, RecruiterJobError
 
 
 class JobSearchAgent:
@@ -77,6 +77,9 @@ class JobSearchAgent:
                 print(f"  [{i+1}/{len(cards)}] Fetching details: {card.get('url')}")
                 try:
                     details = await playwright_tools.get_job_details(session, card["url"])
+                except RecruiterJobError as e:
+                    print(f"    ✗ Skipped (recruiter/agency): {e}")
+                    continue
                 except JobUnavailableError as e:
                     print(f"    ✗ Skipped (unavailable): {e}")
                     continue

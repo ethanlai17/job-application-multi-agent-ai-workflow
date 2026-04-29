@@ -3,6 +3,7 @@ from rich.console import Console
 
 from agents.orchestrator import Orchestrator
 from config.settings import Config
+from tools.keyword_tools import get_library_summary
 
 console = Console()
 
@@ -65,6 +66,12 @@ def full(title, location, salary_min, max_jobs):
     except Exception as e:
         console.print(f"[bold red]Error:[/bold red] {e}")
         raise SystemExit(1)
+
+
+@cli.command()
+def keywords():
+    """Show the PM keyword library — popular vs. niche keywords across all tracked JDs."""
+    console.print(get_library_summary())
 
 
 @cli.command()
