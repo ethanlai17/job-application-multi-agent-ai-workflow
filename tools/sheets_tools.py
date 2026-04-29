@@ -128,3 +128,37 @@ def get_all_jobs(ws: gspread.Worksheet) -> list[JobListing]:
 
 def get_approved_jobs(ws: gspread.Worksheet) -> list[JobListing]:
     return [j for j in get_all_jobs(ws) if j.status == ApplicationStatus.APPROVED]
+
+
+def get_manual_url_rows(ws: gspread.Worksheet) -> list[tuple[int, str]]:
+    """Return (row_number, url) for rows where URL is a LinkedIn jobs URL and Status is empty.
+
+    These are rows the user created manually by pasting a URL — the rest of the
+    fields are blank and waiting to be filled by the process command.
+    """
+    url_col = HEADERS.index("URL")
+    status_col = HEADERS.index("Status")
+    all_values = ws.get_all_values()
+    result = []
+    for i, row in enumerate(all_values[1:], start=2):  # skip header row
+        url = row[url_col].strip() if len(row) > url_col else ""
+        status = row[status_col].strip() if len(row) > status_col else ""
+        if "linkedin.com/jobs" in url and not status:
+            result.append((i, url))
+    return result
+
+
+def fill_manual_row(ws: gspread.Worksheet, row_num: int, job: JobListing) -> None:
+    """Write all job fields into an existing row that the user created with only a URL."""
+    update_job_row(
+        ws,
+        row_num,
+        **{
+            "Job Title": job.title,
+            "Company": job.company,
+            "Location": job.location,
+            "Salary": job.salary,
+            "Date Found": job.date_found.isoformat() if isinstance(job.date_found, date) else str(job.date_found),
+            "LinkedIn Job ID": job.linkedin_job_id,
+        },
+    )

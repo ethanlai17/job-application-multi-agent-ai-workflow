@@ -47,3 +47,11 @@ class SheetsAgent:
 
     def get_all_jobs(self) -> list[JobListing]:
         return sheets_tools.get_all_jobs(self.ws)
+
+    def get_manual_url_rows(self) -> list[tuple[int, str]]:
+        """Return (row_number, url) for manually-added LinkedIn URLs awaiting processing."""
+        return sheets_tools.get_manual_url_rows(self.ws)
+
+    def fill_manual_row(self, job: JobListing) -> None:
+        """Write scraped job fields into the existing row identified by job.sheet_row."""
+        sheets_tools.fill_manual_row(self.ws, job.sheet_row, job)

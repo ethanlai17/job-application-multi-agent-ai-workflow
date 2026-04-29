@@ -69,6 +69,23 @@ def full(title, location, salary_min, max_jobs):
 
 
 @cli.command()
+def process():
+    """Process LinkedIn URLs you've manually added to the Google Sheet.
+
+    Paste a LinkedIn job URL into the URL column and leave Status blank.
+    This command scrapes the job, fills in the row, and generates tailored
+    CV + cover letter — then waits for your review before applying.
+    """
+    try:
+        config = Config.load()
+        orchestrator = Orchestrator(config)
+        orchestrator.run_process()
+    except Exception as e:
+        console.print(f"[bold red]Error:[/bold red] {e}")
+        raise SystemExit(1)
+
+
+@cli.command()
 def keywords():
     """Show the PM keyword library — popular vs. niche keywords across all tracked JDs."""
     console.print(get_library_summary())

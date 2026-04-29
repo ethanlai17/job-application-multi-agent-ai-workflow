@@ -1,3 +1,7 @@
+import asyncio
+import re
+from datetime import date
+
 from openai import OpenAI
 from rich.console import Console
 from rich.table import Table
@@ -6,9 +10,12 @@ from agents.application_agent import ApplicationAgent
 from agents.document_agent import DocumentAgent
 from agents.job_search_agent import JobSearchAgent
 from agents.sheets_agent import SheetsAgent
+from browser.session import BrowserSession
 from config.settings import Config
 from models.job import ApplicationStatus, JobListing
+from tools import playwright_tools
 from tools.document_tools import read_cv
+from tools.playwright_tools import JobUnavailableError, RecruiterJobError
 
 GROQ_BASE_URL = "https://api.groq.com/openai/v1"
 
@@ -99,6 +106,104 @@ class Orchestrator:
             except Exception as e:
                 self.sheets.update_job_status(job, ApplicationStatus.ERROR, Notes=str(e))
                 console.print(f"  [red]✗ Error: {e}[/red]")
+
+    def run_process(self):
+        """Process LinkedIn URLs manually added to the Google Sheet."""
+        console.print("[bold blue]Processing manually-added LinkedIn URLs...[/bold blue]")
+        asyncio.run(self._process_manual_async())
+
+    async def _process_manual_async(self):
+        manual_rows = self.sheets.get_manual_url_rows()
+        if not manual_rows:
+            console.print(
+                "[yellow]No pending URLs found. Add a LinkedIn job URL to the sheet "
+                "(leave Status blank) then re-run.[/yellow]"
+            )
+            return
+
+        console.print(f"[green]Found {len(manual_rows)} URL(s) to process.[/green]")
+        cv_text = self._load_cv()
+
+        async with BrowserSession(self.config) as session:
+            logged_in = await playwright_tools.linkedin_login(
+                session, self.config.linkedin_email, self.config.linkedin_password
+            )
+            if not logged_in:
+                raise RuntimeError("LinkedIn login failed — check credentials in .env")
+
+            for row_num, url in manual_rows:
+                console.print(f"\n  [{manual_rows.index((row_num, url)) + 1}/{len(manual_rows)}] {url}")
+
+                # Extract numeric job ID from the URL slug
+                clean_url = url.split("?")[0].rstrip("/")
+                last_seg = clean_url.split("/")[-1]
+                if last_seg.isdigit():
+                    job_id = last_seg
+                else:
+                    m = re.search(r"-(\d+)$", last_seg)
+                    job_id = m.group(1) if m else ""
+
+                try:
+                    details = await playwright_tools.get_job_details(session, url)
+                except RecruiterJobError:
+                    console.print("  [red]✗ Skipped — recruiter/agency posting[/red]")
+                    self.sheets.update_job_status(
+                        JobListing(title="", company="", url=url, location="", salary="",
+                                   date_found=date.today(), sheet_row=row_num),
+                        ApplicationStatus.ERROR,
+                        Notes="Recruiter/agency posting — skipped automatically",
+                    )
+                    continue
+                except JobUnavailableError:
+                    console.print("  [red]✗ Skipped — job posting unavailable or removed[/red]")
+                    self.sheets.update_job_status(
+                        JobListing(title="", company="", url=url, location="", salary="",
+                                   date_found=date.today(), sheet_row=row_num),
+                        ApplicationStatus.ERROR,
+                        Notes="Job posting unavailable or removed",
+                    )
+                    continue
+                except Exception as e:
+                    console.print(f"  [red]✗ Error scraping page: {e}[/red]")
+                    self.sheets.update_job_status(
+                        JobListing(title="", company="", url=url, location="", salary="",
+                                   date_found=date.today(), sheet_row=row_num),
+                        ApplicationStatus.ERROR,
+                        Notes=str(e),
+                    )
+                    continue
+
+                job = JobListing(
+                    title=details.get("title_from_detail", ""),
+                    company=details.get("company_from_detail", ""),
+                    url=url,
+                    location="",
+                    salary=details.get("salary", ""),
+                    date_found=date.today(),
+                    job_description=details["job_description"],
+                    linkedin_job_id=job_id,
+                    sheet_row=row_num,
+                )
+
+                self.sheets.fill_manual_row(job)
+                self.sheets.update_job_status(job, ApplicationStatus.CV_GENERATED)
+                console.print(f"  [cyan]→[/cyan] {job.title} @ {job.company} — generating documents…")
+
+                try:
+                    cv_path, letter_path = self.document.generate(job, cv_text)
+                    self.sheets.update_job_links(job, cv_path, letter_path)
+                    self.sheets.update_job_status(job, ApplicationStatus.PENDING_REVIEW)
+                    console.print(f"    [green]✓[/green] CV: {cv_path}")
+                    console.print(f"    [green]✓[/green] Cover letter: {letter_path}")
+                except Exception as e:
+                    self.sheets.update_job_status(job, ApplicationStatus.ERROR, Notes=str(e))
+                    console.print(f"    [red]✗ Doc generation failed: {e}[/red]")
+
+        console.print(
+            "\n[bold]Done.[/bold] Open your Google Sheet, review the documents, "
+            "set [bold green]Status → Approved[/bold green], then run: "
+            "[bold cyan]python main.py apply[/bold cyan]"
+        )
 
     def run_full(
         self,
