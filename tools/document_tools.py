@@ -243,118 +243,153 @@ def generate_cover_letter(
 # ── PDF rendering ─────────────────────────────────────────────────────────────
 
 def render_cv_pdf(sections: dict, output_path: str) -> str:
-    """Render a professional single-page A4 CV PDF using reportlab."""
+    """Render a professional single-page A4 CV PDF using reportlab.
+
+    Automatically scales line spacing upward (binary search) so the content
+    always fills the full A4 page without overflowing to a second page.
+    Bullet points are justified.
+    """
+    import io
+    import fitz  # PyMuPDF — already a project dependency
     from reportlab.lib.pagesizes import A4
     from reportlab.lib.styles import ParagraphStyle
     from reportlab.lib import colors
-    from reportlab.lib.enums import TA_CENTER, TA_RIGHT
+    from reportlab.lib.enums import TA_CENTER, TA_RIGHT, TA_JUSTIFY
     from reportlab.platypus import (
         SimpleDocTemplate, Paragraph, Spacer, HRFlowable, Table, TableStyle,
     )
 
-    Path(output_path).parent.mkdir(parents=True, exist_ok=True)
-
-    doc = SimpleDocTemplate(
-        output_path,
-        pagesize=A4,
-        leftMargin=38,
-        rightMargin=38,
-        topMargin=28,
-        bottomMargin=24,
+    W = A4[0] - 76  # usable content width
+    _DOC_KWARGS = dict(
+        pagesize=A4, leftMargin=38, rightMargin=38, topMargin=28, bottomMargin=24,
     )
 
-    W = A4[0] - 76  # usable content width
+    def _build_story(scale: float) -> list:
+        """Build the platypus story with vertical spacing multiplied by scale."""
 
-    def s(name, **kw):
-        defaults = dict(fontName="Helvetica", fontSize=8.8, leading=10.5)
-        defaults.update(kw)
-        return ParagraphStyle(name, **defaults)
+        def s(name, **kw):
+            defaults = dict(fontName="Helvetica", fontSize=8.8, leading=10.5 * scale)
+            defaults.update(kw)
+            return ParagraphStyle(name, **defaults)
 
-    name_s    = s("Name", fontName="Helvetica-Bold", fontSize=15, leading=19,
-                  alignment=TA_CENTER, spaceAfter=1)
-    contact_s = s("Contact", fontSize=7.8, leading=9.5, alignment=TA_CENTER, spaceAfter=3)
-    section_s = s("Section", fontName="Helvetica-Bold", fontSize=9.2, leading=11,
-                  spaceBefore=4, spaceAfter=1)
-    title_s   = s("Title", fontName="Helvetica-Bold", fontSize=8.8, leading=10.5)
-    dates_s   = s("Dates", fontSize=8.2, leading=10.5, alignment=TA_RIGHT)
-    bullet_s  = s("Bullet", fontSize=8.2, leading=10.5, leftIndent=9, spaceAfter=0.3)
-    edu_s     = s("Edu", fontName="Helvetica-Bold", fontSize=8.8, leading=10.5)
-    edu_det_s = s("EduDet", fontSize=8.2, leading=10.5, leftIndent=9, spaceAfter=1.5)
+        # Fixed header styles — not scaled (always the same regardless of content)
+        name_s    = s("Name",    fontName="Helvetica-Bold", fontSize=15, leading=19,
+                      alignment=TA_CENTER, spaceAfter=1)
+        contact_s = s("Contact", fontSize=7.8, leading=9.5, alignment=TA_CENTER, spaceAfter=3)
 
-    story = []
+        # Scaled body styles
+        section_s = s("Section", fontName="Helvetica-Bold", fontSize=9.2, leading=11,
+                      spaceBefore=4 * scale, spaceAfter=1 * scale)
+        title_s   = s("Title",   fontName="Helvetica-Bold", fontSize=8.8, leading=10.5 * scale)
+        dates_s   = s("Dates",   fontSize=8.2, leading=10.5 * scale, alignment=TA_RIGHT)
+        bullet_s  = s("Bullet",  fontSize=8.2, leading=10.5 * scale, leftIndent=9,
+                      spaceAfter=0.3 * scale, alignment=TA_JUSTIFY)
+        edu_s     = s("Edu",     fontName="Helvetica-Bold", fontSize=8.8, leading=10.5 * scale)
+        edu_det_s = s("EduDet",  fontSize=8.2, leading=10.5 * scale, leftIndent=9,
+                      spaceAfter=1.5 * scale, alignment=TA_JUSTIFY)
 
-    # ── Header ────────────────────────────────────────────────────────────────
-    story.append(Paragraph("ETHAN LAI", name_s))
-    story.append(Paragraph(_CONTACT, contact_s))
-    story.append(HRFlowable(width="100%", thickness=1, color=colors.black, spaceAfter=3))
+        _table_style = TableStyle([
+            ("LEFTPADDING",   (0, 0), (-1, -1), 0),
+            ("RIGHTPADDING",  (0, 0), (-1, -1), 0),
+            ("TOPPADDING",    (0, 0), (-1, -1), 2 * scale),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
+            ("VALIGN",        (0, 0), (-1, -1), "TOP"),
+            ("ALIGN",         (1, 0), (1, 0),   "RIGHT"),
+        ])
 
-    def section_header(text):
-        story.append(Paragraph(text, section_s))
-        story.append(HRFlowable(width="100%", thickness=0.5, color=colors.black, spaceAfter=2))
+        story = []
 
-    _table_style = TableStyle([
-        ("LEFTPADDING",   (0, 0), (-1, -1), 0),
-        ("RIGHTPADDING",  (0, 0), (-1, -1), 0),
-        ("TOPPADDING",    (0, 0), (-1, -1), 2),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
-        ("VALIGN",        (0, 0), (-1, -1), "TOP"),
-        ("ALIGN",         (1, 0), (1, 0),   "RIGHT"),
-    ])
+        # ── Header ────────────────────────────────────────────────────────────
+        story.append(Paragraph("ETHAN LAI", name_s))
+        story.append(Paragraph(_CONTACT, contact_s))
+        story.append(HRFlowable(width="100%", thickness=1, color=colors.black,
+                                spaceAfter=3 * scale))
 
-    def title_row(label, dates):
-        t = Table(
-            [[Paragraph(f"<b>{label}</b>", title_s), Paragraph(dates, dates_s)]],
-            colWidths=[W * 0.73, W * 0.27],
-            hAlign="LEFT",
-        )
-        t.setStyle(_table_style)
-        story.append(t)
+        def section_header(text):
+            story.append(Paragraph(text, section_s))
+            story.append(HRFlowable(width="100%", thickness=0.5, color=colors.black,
+                                    spaceAfter=2 * scale))
 
-    def add_bullets(bullets):
-        for b in bullets:
-            story.append(Paragraph(f"• {b}", bullet_s))
+        def title_row(label, dates):
+            t = Table(
+                [[Paragraph(f"<b>{label}</b>", title_s), Paragraph(dates, dates_s)]],
+                colWidths=[W * 0.73, W * 0.27],
+                hAlign="LEFT",
+            )
+            t.setStyle(_table_style)
+            story.append(t)
 
-    # ── Work Experience ───────────────────────────────────────────────────────
-    section_header("WORK EXPERIENCE")
-    for job in sections.get("work_experience", []):
-        label = f"{job['title']} - {job['company']}"
-        title_row(label, job.get("dates", ""))
-        add_bullets(job.get("bullets", []))
-        story.append(Spacer(1, 2))
+        def add_bullets(bullets):
+            for b in bullets:
+                story.append(Paragraph(f"• {b}", bullet_s))
 
-    # ── Project Experience ────────────────────────────────────────────────────
-    section_header("PROJECT EXPERIENCE")
-    for proj in sections.get("projects", _NEW_PROJECT):
-        label = proj["name"]
-        if proj.get("subtitle"):
-            label = f"{proj['subtitle']} - {proj['name']}"
-        title_row(label, proj.get("dates", ""))
-        add_bullets(proj.get("bullets", []))
-        story.append(Spacer(1, 2))
+        # ── Work Experience ───────────────────────────────────────────────────
+        section_header("WORK EXPERIENCE")
+        for job in sections.get("work_experience", []):
+            label = f"{job['title']} - {job['company']}"
+            title_row(label, job.get("dates", ""))
+            add_bullets(job.get("bullets", []))
+            story.append(Spacer(1, 2 * scale))
 
-    # ── Education (fixed) ────────────────────────────────────────────────────
-    section_header("EDUCATION")
-    for edu in _EDUCATION:
-        story.append(Paragraph(edu["title"], edu_s))
-        if edu["detail"]:
-            story.append(Paragraph(f"• {edu['detail']}", edu_det_s))
+        # ── Project Experience ────────────────────────────────────────────────
+        section_header("PROJECT EXPERIENCE")
+        for proj in sections.get("projects", [_NEW_PROJECT]):
+            label = proj["name"]
+            if proj.get("subtitle"):
+                label = f"{proj['subtitle']} - {proj['name']}"
+            title_row(label, proj.get("dates", ""))
+            add_bullets(proj.get("bullets", []))
+            story.append(Spacer(1, 2 * scale))
+
+        # ── Education (fixed) ────────────────────────────────────────────────
+        section_header("EDUCATION")
+        for edu in _EDUCATION:
+            story.append(Paragraph(edu["title"], edu_s))
+            if edu["detail"]:
+                story.append(Paragraph(f"• {edu['detail']}", edu_det_s))
+            else:
+                story.append(Spacer(1, 3 * scale))
+
+        # ── Skills ───────────────────────────────────────────────────────────
+        section_header("SKILLS")
+        skills = sections.get("skills", {})
+        if isinstance(skills, dict):
+            if skills.get("proficiency"):
+                story.append(Paragraph(
+                    f"• <b>Proficiency:</b> {skills['proficiency']}", bullet_s))
+            if skills.get("tools"):
+                story.append(Paragraph(
+                    f"• <b>Tools:</b> {skills['tools']}", bullet_s))
+        elif isinstance(skills, list):
+            add_bullets(skills)
+
+        return story
+
+    def _page_count(scale: float) -> int:
+        buf = io.BytesIO()
+        doc = SimpleDocTemplate(buf, **_DOC_KWARGS)
+        doc.build(_build_story(scale))
+        buf.seek(0)
+        pdf = fitz.open(stream=buf.read(), filetype="pdf")
+        n = pdf.page_count
+        pdf.close()
+        return n
+
+    # Binary-search for the largest scale that still fits on one page.
+    # Range 1.0–2.0; 8 iterations → precision ~0.004, well below any visible threshold.
+    bounds = [1.0, 2.0]
+    best = 1.0
+    for _ in range(8):
+        mid = (bounds[0] + bounds[1]) / 2
+        if _page_count(mid) == 1:
+            best = mid
+            bounds[0] = mid
         else:
-            story.append(Spacer(1, 3))
+            bounds[1] = mid
 
-    # ── Skills ────────────────────────────────────────────────────────────────
-    section_header("SKILLS")
-    skills = sections.get("skills", {})
-    if isinstance(skills, dict):
-        if skills.get("proficiency"):
-            story.append(Paragraph(
-                f"• <b>Proficiency:</b> {skills['proficiency']}", bullet_s))
-        if skills.get("tools"):
-            story.append(Paragraph(
-                f"• <b>Tools:</b> {skills['tools']}", bullet_s))
-    elif isinstance(skills, list):
-        add_bullets(skills)
-
-    doc.build(story)
+    Path(output_path).parent.mkdir(parents=True, exist_ok=True)
+    doc = SimpleDocTemplate(output_path, **_DOC_KWARGS)
+    doc.build(_build_story(best))
     return output_path
 
 
