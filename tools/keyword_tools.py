@@ -60,6 +60,8 @@ _VOCABULARY: dict[str, tuple[str, list[str]]] = {
     "Metrics & success criteria": ("skill", ["success metrics", "north star", "metric"]),
     "Problem definition":       ("skill", ["problem definition", "problem statement"]),
     "Hypothesis validation":    ("skill", ["hypothesis", "validate assumption"]),
+    "Backend systems":          ("skill", ["backend system", "back-end system", "server-side system", "backend architecture"]),
+    "API & system integrations": ("skill", ["third-party integration", "third party integration", "api integration", "system integration", "partner integration"]),
     # Practices
     "A/B testing":              ("practice", ["a/b test", "ab test", "split test"]),
     "Experimentation":          ("practice", ["experiment"]),
@@ -69,6 +71,7 @@ _VOCABULARY: dict[str, tuple[str, list[str]]] = {
     "UX design":                ("practice", ["ux", "user experience design"]),
     "Prototyping":              ("practice", ["prototype", "wireframe", "mockup"]),
     "Growth hacking":           ("practice", ["growth loop", "growth hack", "growth experiment"]),
+    "Workflow automation":      ("practice", ["automate workflow", "workflow automation", "process automation", "automation workflow"]),
     # Tools
     "Jira":                     ("tool", ["jira"]),
     "Confluence":               ("tool", ["confluence"]),
@@ -95,7 +98,9 @@ _VOCABULARY: dict[str, tuple[str, list[str]]] = {
     "Enterprise software":      ("domain", ["enterprise software", "enterprise product"]),
     "Marketplace":              ("domain", ["marketplace"]),
     "Mobile":                   ("domain", ["mobile app", "ios", "android"]),
-    "AI/ML products":           ("domain", ["ai product", "ml product", "machine learning product", "llm"]),
+    "AI/ML products":           ("domain", ["ai product", "ml product", "machine learning product", "llm", "ai-native", "ai-driven", "artificial intelligence"]),
+    "Travel":                   ("domain", ["travel industry", "travel domain", "online travel", "travel tech", "flight distribution", "gds", "global distribution system"]),
+    "Booking platforms":        ("domain", ["booking platform", "booking system", "reservation system", "inventory management"]),
     "Payments":                 ("domain", ["payment", "transaction", "checkout"]),
     "E-commerce":               ("domain", ["e-commerce", "ecommerce"]),
 }

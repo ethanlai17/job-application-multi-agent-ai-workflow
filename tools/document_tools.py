@@ -67,6 +67,36 @@ _WORK_EXPERIENCE_FIXED = [
     {"title": "Account Manager",                  "company": "Carousell",     "dates": "Jul – Dec 2019"},
 ]
 
+# Verified extra bullets — real experience not yet written into the original CV PDF.
+# The LLM may use these exactly as written when the JD matches the described skill.
+_EXTRA_BULLETS = [
+    {
+        "company": "TUI UK",
+        "text": (
+            "Defined conversion, bookability, and API latency as needle-moving KPIs at TUI UK, "
+            "applying a data-driven approach to product ownership to translate metric insights "
+            "into engineering priorities"
+        ),
+        "use_when": (
+            "JD explicitly mentions data-driven product ownership, defining or tracking metrics, "
+            "conversion/bookability/latency, or performance KPIs"
+        ),
+    },
+]
+
+
+def _extra_bullets_block() -> str:
+    if not _EXTRA_BULLETS:
+        return ""
+    lines = [
+        "\nADDITIONAL VERIFIED BULLETS (confirmed real experience — not yet in original CV PDF):",
+        "Use these EXACTLY as written when the JD calls for the corresponding skill.",
+    ]
+    for b in _EXTRA_BULLETS:
+        lines.append(f'  {b["company"]}: "{b["text"]}"')
+        lines.append(f'  [Include when: {b["use_when"]}]')
+    return "\n".join(lines)
+
 # ── CV reading ────────────────────────────────────────────────────────────────
 
 def read_cv(path: str) -> str:
@@ -105,9 +135,9 @@ def _popular_keywords_rule(popular_keywords: list[str] | None) -> str:
         )
     kw_list = ", ".join(popular_keywords)
     return (
-        f"   - APPROVED KEYWORD LIST (from market-wide keyword library — appear in 2+ JDs):\n"
+        f"   - APPROVED KEYWORD LIST (market-popular skills + every skill explicitly required in this JD):\n"
         f"     {kw_list}\n"
-        f"   - Only include skills/keywords from this approved list OR from Ethan's original CV.\n"
+        f"   - Only include skills/keywords from this approved list OR from Ethan's original CV or ADDITIONAL VERIFIED BULLETS.\n"
         f"   - Do NOT add niche, company-specific jargon from this JD that is not on the approved list\n"
         f"     (e.g. one-off phrases like 'thinking in bets', 'thin/vertical slicing', 'test-learn-iterate'\n"
         f"     should only appear if they are already in the approved list above).\n"
@@ -162,7 +192,7 @@ RULES:
    - NEVER append "…demonstrating/reflecting/showcasing/highlighting X" at the end — forbidden.
    - Do NOT truncate bullets to just an action verb without context or metric.
    - Do NOT invent metrics, companies, or outcomes not in the original CV.
-   - Do NOT fabricate bullets — only use or adapt bullets that literally exist in the original CV.
+   - Do NOT fabricate bullets — only use or adapt bullets from the original CV or ADDITIONAL VERIFIED BULLETS below.
      Carousell has EXACTLY 2 bullets in the original. Do not add a third.
    - Only weave in a JD keyword if it fits naturally. If it sounds forced, leave that bullet unchanged.
    - Target style: "Drove €1.6M revenue by launching global booking fee across 5 microservices via test-learn-iterate"
@@ -199,6 +229,7 @@ RULES:
 
 ETHAN'S ORIGINAL CV:
 {cv_text}
+{_extra_bullets_block()}
 
 TARGET ROLE:
 Title: {job_title}
