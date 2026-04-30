@@ -6,6 +6,7 @@ from config.settings import Config
 from models.job import JobListing
 from tools import playwright_tools, sheets_tools
 from tools.playwright_tools import JobUnavailableError, RecruiterJobError
+from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TaskProgressColumn
 
 
 class JobSearchAgent:
@@ -66,44 +67,57 @@ class JobSearchAgent:
 
             # Step 3: Fetch each job detail page, skip unavailable / already tracked
             jobs: list[JobListing] = []
-            for i, card in enumerate(cards):
-                job_id = card.get("linkedin_job_id", "")
+            
+            with Progress(
+                SpinnerColumn(),
+                TextColumn("[progress.description]{task.description}"),
+                BarColumn(),
+                TaskProgressColumn(),
+            ) as progress:
+                task = progress.add_task("[cyan]Fetching job details...", total=len(cards))
+                for i, card in enumerate(cards):
+                    job_id = card.get("linkedin_job_id", "")
 
-                # Skip if already in the sheet
-                if self._ws and sheets_tools.job_already_tracked(self._ws, job_id):
-                    print(f"  [{i+1}/{len(cards)}] Already tracked — skip: {card.get('url')}")
-                    continue
+                    # Skip if already in the sheet
+                    if self._ws and sheets_tools.job_already_tracked(self._ws, job_id):
+                        progress.console.print(f"  [dim]Already tracked — skip: {card.get('url')}[/dim]")
+                        progress.advance(task)
+                        continue
 
-                print(f"  [{i+1}/{len(cards)}] Fetching details: {card.get('url')}")
-                try:
-                    details = await playwright_tools.get_job_details(session, card["url"])
-                except RecruiterJobError as e:
-                    print(f"    ✗ Skipped (recruiter/agency): {e}")
-                    continue
-                except JobUnavailableError as e:
-                    print(f"    ✗ Skipped (unavailable): {e}")
-                    continue
-                except Exception as e:
-                    print(f"    ✗ Skipped (error): {e}")
-                    continue
+                    progress.update(task, description=f"[cyan]Fetching details: {card.get('company', 'Unknown')}")
+                    try:
+                        details = await playwright_tools.get_job_details(session, card["url"])
+                    except RecruiterJobError as e:
+                        progress.console.print(f"    [yellow]✗ Skipped (recruiter/agency): {e}[/yellow]")
+                        progress.advance(task)
+                        continue
+                    except JobUnavailableError as e:
+                        progress.console.print(f"    [yellow]✗ Skipped (unavailable): {e}[/yellow]")
+                        progress.advance(task)
+                        continue
+                    except Exception as e:
+                        progress.console.print(f"    [red]✗ Skipped (error): {e}[/red]")
+                        progress.advance(task)
+                        continue
 
-                # Prefer title/company from the detail page (more reliable than card)
-                title_final = details.get("title_from_detail") or card.get("title", "")
-                company_final = details.get("company_from_detail") or card.get("company", "")
+                    # Prefer title/company from the detail page (more reliable than card)
+                    title_final = details.get("title_from_detail") or card.get("title", "")
+                    company_final = details.get("company_from_detail") or card.get("company", "")
 
-                jobs.append(JobListing(
-                    title=title_final,
-                    company=company_final,
-                    url=card["url"],
-                    location=card.get("location", ""),
-                    salary=details.get("salary") or card.get("salary", ""),
-                    date_found=date.today(),
-                    job_description=details["job_description"],
-                    linkedin_job_id=job_id,
-                ))
-                print(f"    ✓ {title_final} @ {company_final}")
+                    jobs.append(JobListing(
+                        title=title_final,
+                        company=company_final,
+                        url=card["url"],
+                        location=card.get("location", ""),
+                        salary=details.get("salary") or card.get("salary", ""),
+                        date_found=date.today(),
+                        job_description=details["job_description"],
+                        linkedin_job_id=job_id,
+                    ))
+                    progress.console.print(f"    [green]✓[/green] {title_final} @ {company_final}")
+                    progress.advance(task)
 
-                if len(jobs) >= max_results:
-                    break
+                    if len(jobs) >= max_results:
+                        break
 
             return jobs

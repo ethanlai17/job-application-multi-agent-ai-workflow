@@ -27,21 +27,48 @@ async def linkedin_login(session: BrowserSession, email: str, password: str) -> 
     await session.page.goto("https://www.linkedin.com/feed/", wait_until="domcontentloaded")
     await session.random_delay()
 
-    if "feed" in session.page.url:
+    base_url = session.page.url.split("?")[0]
+    if "linkedin.com/feed" in base_url or "linkedin.com/mynetwork" in base_url:
         return True  # already logged in via saved cookies
 
     await session.page.goto("https://www.linkedin.com/login", wait_until="domcontentloaded")
     await session.random_delay()
 
-    await session.human_type("#username", email)
-    await session.human_type("#password", password)
+    # Robustly find inputs even if LinkedIn uses dynamic React IDs
+    await session.page.evaluate('''() => {
+        const emails = Array.from(document.querySelectorAll('input#session_key, input#username, input[type="text"], input[type="email"]'));
+        const email = emails.find(e => e.offsetParent !== null); // first visible
+        if (email) email.id = "injected_email_input";
+        
+        const passes = Array.from(document.querySelectorAll('input#session_password, input#password, input[type="password"]'));
+        const pass = passes.find(e => e.offsetParent !== null); // first visible
+        if (pass) pass.id = "injected_pass_input";
+    }''')
+    
+    await session.human_type("#injected_email_input", email)
+    await session.human_type("#injected_pass_input", password)
     await session.random_delay()
-    await session.page.click('button[type="submit"]')
+    # LinkedIn changed sign-in button to type="button" — press Enter instead of
+    # relying on a submit selector that may break with UI updates.
+    try:
+        await session.page.click(
+            'button[type="submit"], button[aria-label="Sign in"]',
+            timeout=3000,
+        )
+    except Exception:
+        try:
+            await session.page.click(
+                'button:has-text("Sign in"):not(:has-text("with"))',
+                timeout=3000,
+            )
+        except Exception:
+            await session.page.keyboard.press("Enter")
     await session.page.wait_for_load_state("domcontentloaded")
     await session.random_delay()
     await session.check_blocked()
 
-    return "feed" in session.page.url or "mynetwork" in session.page.url
+    base_url = session.page.url.split("?")[0]
+    return "linkedin.com/feed" in base_url or "linkedin.com/mynetwork" in base_url
 
 
 async def search_linkedin_jobs(
@@ -291,8 +318,56 @@ async def navigate_to_url(session: BrowserSession, url: str) -> str:
 
 
 async def get_page_text(session: BrowserSession) -> str:
-    """Return visible text of the current page (for Claude to read form structure)."""
-    return await session.page.inner_text("body")
+    """Return a concise summary of the current page: headings, form labels/inputs, and buttons."""
+    try:
+        text = await session.page.evaluate("""() => {
+            const parts = [];
+            // Page title
+            parts.push('URL: ' + window.location.href);
+            // Headings
+            document.querySelectorAll('h1,h2,h3').forEach(el => {
+                const t = el.innerText.trim();
+                if (t) parts.push('[H] ' + t);
+            });
+            // Form labels
+            document.querySelectorAll('label').forEach(el => {
+                const t = el.innerText.trim();
+                if (t) parts.push('[LABEL] ' + t);
+            });
+            // Inputs and selects
+            document.querySelectorAll('input,select,textarea').forEach(el => {
+                const type = el.type || el.tagName.toLowerCase();
+                const name = el.name || el.placeholder || el.id || '';
+                const val = el.value || '';
+                parts.push('[INPUT type=' + type + ' name=' + name + ' value=' + val + ']');
+            });
+            // Buttons and action links (skip accessibility-only ones)
+            const skipTexts = new Set(['skip to main content', 'skip to content']);
+            const actionKeywords = ['apply', 'submit', 'upload', 'continue', 'next', 'save', 'send', 'interested'];
+            document.querySelectorAll('button,a[role=button],[type=submit]').forEach(el => {
+                const t = (el.innerText || el.value || '').trim();
+                if (t && !skipTexts.has(t.toLowerCase())) parts.push('[BTN] ' + t);
+            });
+            // Also include <a> tags that look like action links (have aria-label with action keywords)
+            // Format: [APPLY_LINK <aria-label>] so the agent knows to use a[aria-label="<label>"]
+            document.querySelectorAll("a[aria-label]").forEach(function(el) {
+                var label = el.getAttribute("aria-label") || "";
+                var t = (el.innerText || "").trim() || label;
+                var lc = (label + " " + t).toLowerCase();
+                if (label && actionKeywords.some(function(k) { return lc.indexOf(k) >= 0; })) {
+                    parts.push("[APPLY_LINK " + label + "] " + t);
+                }
+            });
+            // Any visible alerts or status messages
+            document.querySelectorAll('[role=alert],[aria-live],.error,.success').forEach(el => {
+                const t = el.innerText.trim();
+                if (t) parts.push('[MSG] ' + t);
+            });
+            return parts.join('\\n');
+        }""")
+        return text[:8000]  # hard cap just in case
+    except Exception as e:
+        return f"Error reading page: {e}"
 
 
 async def take_screenshot(session: BrowserSession, name: str = "screenshot") -> str:
@@ -323,15 +398,83 @@ async def fill_field(session: BrowserSession, selector: str, value: str):
 
 
 async def click_element(session: BrowserSession, selector: str) -> str:
-    """Click an element by CSS selector."""
+    """Click an element by CSS selector, :has-text() pattern, or aria-label."""
+    import re as _re
+
+    async def _do_click(el) -> str:
+        """Click el; if a new tab opens within 1.5 s, switch to it."""
+        pages_before = len(session._context.pages)
+        await el.scroll_into_view_if_needed()
+        await session.random_delay()
+        await el.click()
+        await asyncio.sleep(1.5)
+        pages_after = session._context.pages
+        if len(pages_after) > pages_before:
+            new_page = pages_after[-1]
+            await new_page.wait_for_load_state("domcontentloaded")
+            session.page = new_page
+            return "ok_new_tab"
+        return "ok"
+
+    if not selector or not selector.strip():
+        return "not_found"
+
     try:
         el = await session.page.query_selector(selector)
         if el:
-            await el.scroll_into_view_if_needed()
-            await session.random_delay()
-            await el.click()
-            return "ok"
+            return await _do_click(el)
+
+        # Fallback 1: :has-text() with Unicode-safe JS text search
+        m = _re.search(r':has-text\(["\'](.+?)["\']\)', selector)
+        if m:
+            needle = m.group(1).strip().lower()
+            tag = selector.split(":")[0] or "*"
+            handle = await session.page.evaluate_handle(f"""() => {{
+                const needle = {repr(needle)};
+                const els = Array.from(document.querySelectorAll({repr(tag)}));
+                return els.find(e => e.innerText.trim().toLowerCase().includes(needle)) || null;
+            }}""")
+            if handle:
+                js_el = handle.as_element()
+                if js_el:
+                    return await _do_click(js_el)
+
+        # Fallback 2: aria-label match (e.g. 'a[aria-label="Apply on company website"]')
+        m2 = _re.search(r'aria-label[=\s]*["\']([^"\']+)["\']', selector)
+        if m2:
+            needle = m2.group(1).strip().lower()
+            handle = await session.page.evaluate_handle(f"""() => {{
+                const needle = {repr(needle)};
+                const els = Array.from(document.querySelectorAll('[aria-label]'));
+                return els.find(e => (e.getAttribute('aria-label') || '').toLowerCase().includes(needle)) || null;
+            }}""")
+            if handle:
+                js_el = handle.as_element()
+                if js_el:
+                    return await _do_click(js_el)
+
         return "not_found"
+    except Exception as e:
+        if "ok" in str(e):
+            return "ok"
+        return f"error: {e}"
+
+
+async def upload_file(session: BrowserSession, selector: str, file_path: str) -> str:
+    """Set a file on a file-input element (supports hidden inputs and drop-zone triggers)."""
+    try:
+        abs_path = str(Path(file_path).resolve())
+        # Try the selector directly first (may be the hidden <input type=file>)
+        el = await session.page.query_selector(selector)
+        if el and await el.evaluate("e => e.tagName.toLowerCase()") == "input":
+            await el.set_input_files(abs_path)
+            return "ok"
+        # Fallback: find any visible file input on the page
+        inputs = await session.page.query_selector_all("input[type='file']")
+        if inputs:
+            await inputs[0].set_input_files(abs_path)
+            return "ok"
+        return "no_file_input_found"
     except Exception as e:
         return f"error: {e}"
 

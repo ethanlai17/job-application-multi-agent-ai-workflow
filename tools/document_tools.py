@@ -3,6 +3,8 @@ import re
 from pathlib import Path
 
 from openai import OpenAI
+from tenacity import retry, retry_if_exception, stop_after_attempt, wait_fixed
+from rich import print as rprint
 
 
 def _clean_bullet(text: str) -> str:
@@ -149,6 +151,17 @@ def _popular_keywords_rule(popular_keywords: list[str] | None) -> str:
     )
 
 
+def _is_503_error(e: Exception) -> bool:
+    return "503" in str(e)
+
+
+@retry(
+    wait=wait_fixed(2),
+    stop=stop_after_attempt(15),
+    retry=retry_if_exception(_is_503_error),
+    before_sleep=lambda retry_state: rprint(f"  [yellow]API Error. Retrying in 2 seconds... (Attempt {retry_state.attempt_number}/15)[/yellow]"),
+    reraise=True
+)
 def generate_tailored_cv(
     cv_text: str,
     job_description: str,
@@ -245,13 +258,13 @@ Full Job Description:
 
     response = client.chat.completions.create(
         model=model,
-        max_tokens=3500,
         messages=[
             {"role": "system", "content": "Return only valid JSON. No markdown fences."},
             {"role": "user", "content": prompt},
         ],
+        response_format={"type": "json_object"},
     )
-    content = response.choices[0].message.content.strip()
+    content = (response.choices[0].message.content or "").strip()
     # Strip markdown code fences if the model wraps with them
     content = re.sub(r"^```(?:json)?\s*", "", content)
     content = re.sub(r"\s*```$", "", content)
@@ -285,6 +298,13 @@ Full Job Description:
     return result
 
 
+@retry(
+    wait=wait_fixed(2),
+    stop=stop_after_attempt(15),
+    retry=retry_if_exception(_is_503_error),
+    before_sleep=lambda retry_state: rprint(f"  [yellow]API Error. Retrying in 2 seconds... (Attempt {retry_state.attempt_number}/15)[/yellow]"),
+    reraise=True
+)
 def generate_cover_letter(
     cv_text: str,
     job_description: str,
@@ -294,39 +314,37 @@ def generate_cover_letter(
     model: str,
 ) -> str:
     """Ask the LLM for cover letter body paragraphs only (no salutation/sign-off)."""
+    system_instruction = (
+        "You are writing a cover letter body for Ethan Lai, a Technical Product Manager. "
+        "Write exactly 3 paragraphs, total under 280 words, in a formal but human style. "
+        "Focus on specific measurable impacts from Ethan's experience and how they "
+        "match what this company and role need. "
+        "Do NOT include: a salutation (no 'Dear'), sign-off, subject line, or date — "
+        "those are added separately. "
+        "Do NOT use clichés like 'I am writing to express my interest' or "
+        "'I am a passionate'. "
+        "Open with what specifically draws Ethan to this company and role. "
+        "Middle paragraph: 2-3 specific achievements with metrics that directly address the JD. "
+        "Closing: concise statement of contribution and confidence.\n\n"
+        f"ETHAN'S CV:\n{cv_text}"
+    )
+
+    prompt = (
+        f"Write the cover letter body for:\n"
+        f"Job Title: {job_title}\n"
+        f"Company: {company}\n\n"
+        f"Job Description:\n{job_description[:2000]}"
+    )
+
     response = client.chat.completions.create(
         model=model,
-        max_tokens=800,
         messages=[
-            {
-                "role": "system",
-                "content": (
-                    "You are writing a cover letter body for Ethan Lai, a Technical Product Manager. "
-                    "Write exactly 3 paragraphs, total under 280 words, in a formal but human style. "
-                    "Focus on specific measurable impacts from Ethan's experience and how they "
-                    "match what this company and role need. "
-                    "Do NOT include: a salutation (no 'Dear'), sign-off, subject line, or date — "
-                    "those are added separately. "
-                    "Do NOT use clichés like 'I am writing to express my interest' or "
-                    "'I am a passionate'. "
-                    "Open with what specifically draws Ethan to this company and role. "
-                    "Middle paragraph: 2-3 specific achievements with metrics that directly address the JD. "
-                    "Closing: concise statement of contribution and confidence.\n\n"
-                    f"ETHAN'S CV:\n{cv_text}"
-                ),
-            },
-            {
-                "role": "user",
-                "content": (
-                    f"Write the cover letter body for:\n"
-                    f"Job Title: {job_title}\n"
-                    f"Company: {company}\n\n"
-                    f"Job Description:\n{job_description[:2000]}"
-                ),
-            },
+            {"role": "system", "content": system_instruction},
+            {"role": "user", "content": prompt},
         ],
+        max_tokens=800,
     )
-    return response.choices[0].message.content.strip()
+    return (response.choices[0].message.content or "").strip()
 
 
 # ── PDF rendering ─────────────────────────────────────────────────────────────

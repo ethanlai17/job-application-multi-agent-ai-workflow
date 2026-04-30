@@ -5,6 +5,7 @@ from datetime import date
 from openai import OpenAI
 from rich.console import Console
 from rich.table import Table
+from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TaskProgressColumn
 
 from agents.application_agent import ApplicationAgent
 from agents.document_agent import DocumentAgent
@@ -17,7 +18,6 @@ from tools import playwright_tools
 from tools.document_tools import read_cv
 from tools.playwright_tools import JobUnavailableError, RecruiterJobError
 
-GROQ_BASE_URL = "https://api.groq.com/openai/v1"
 
 console = Console()
 
@@ -26,8 +26,8 @@ class Orchestrator:
     def __init__(self, config: Config):
         self.config = config
         self.client = OpenAI(
-            api_key=config.groq_api_key,
-            base_url=GROQ_BASE_URL,
+            api_key=config.deepseek_api_key,
+            base_url="https://api.deepseek.com"
         )
         self.sheets = SheetsAgent(config)
         self.job_search = JobSearchAgent(config, self.client)
@@ -60,18 +60,26 @@ class Orchestrator:
 
         cv_text = self._load_cv()
 
-        for job in logged_jobs:
-            self.sheets.update_job_status(job, ApplicationStatus.CV_GENERATED)
-            console.print(f"  Generating documents for [bold]{job.title}[/bold] @ {job.company}...")
-            try:
-                cv_path, letter_path = self.document.generate(job, cv_text)
-                self.sheets.update_job_links(job, cv_path, letter_path)
-                self.sheets.update_job_status(job, ApplicationStatus.PENDING_REVIEW)
-                console.print(f"    [green]✓[/green] CV: {cv_path}")
-                console.print(f"    [green]✓[/green] Cover letter: {letter_path}")
-            except Exception as e:
-                self.sheets.update_job_status(job, ApplicationStatus.ERROR, Notes=str(e))
-                console.print(f"    [red]✗ Error generating docs: {e}[/red]")
+        with Progress(
+            SpinnerColumn(),
+            TextColumn("[progress.description]{task.description}"),
+            BarColumn(),
+            TaskProgressColumn(),
+            console=console
+        ) as progress:
+            task = progress.add_task("[cyan]Generating documents...", total=len(logged_jobs))
+            for job in logged_jobs:
+                progress.update(task, description=f"[cyan]Generating: {job.company}")
+                self.sheets.update_job_status(job, ApplicationStatus.CV_GENERATED)
+                try:
+                    cv_path, letter_path = self.document.generate(job, cv_text)
+                    self.sheets.update_job_links(job, cv_path, letter_path)
+                    self.sheets.update_job_status(job, ApplicationStatus.PENDING_REVIEW)
+                    progress.console.print(f"    [green]✓[/green] {job.company}: CV & Cover Letter created")
+                except Exception as e:
+                    self.sheets.update_job_status(job, ApplicationStatus.ERROR, Notes=str(e))
+                    progress.console.print(f"    [red]✗ Error generating docs for {job.company}: {e}[/red]")
+                progress.advance(task)
 
         self._print_summary(logged_jobs)
         console.print(
@@ -90,22 +98,31 @@ class Orchestrator:
 
         console.print(f"[green]{len(approved)} job(s) approved. Starting applications...[/green]")
 
-        for job in approved:
-            console.print(f"\n  Applying to [bold]{job.title}[/bold] @ {job.company}...")
-            self.sheets.update_job_status(job, ApplicationStatus.APPLYING)
-            try:
-                success = self.application.apply(job)
-                if success:
-                    self.sheets.update_job_status(job, ApplicationStatus.APPLIED)
-                    console.print("  [green]✓ Applied successfully[/green]")
-                else:
-                    self.sheets.update_job_status(
-                        job, ApplicationStatus.ERROR, Notes="Application agent returned failure"
-                    )
-                    console.print("  [red]✗ Application failed[/red]")
-            except Exception as e:
-                self.sheets.update_job_status(job, ApplicationStatus.ERROR, Notes=str(e))
-                console.print(f"  [red]✗ Error: {e}[/red]")
+        with Progress(
+            SpinnerColumn(),
+            TextColumn("[progress.description]{task.description}"),
+            BarColumn(),
+            TaskProgressColumn(),
+            console=console
+        ) as progress:
+            task = progress.add_task("[cyan]Applying to jobs...", total=len(approved))
+            for job in approved:
+                progress.update(task, description=f"[cyan]Applying: {job.company}")
+                self.sheets.update_job_status(job, ApplicationStatus.APPLYING)
+                try:
+                    success = self.application.apply(job)
+                    if success:
+                        self.sheets.update_job_status(job, ApplicationStatus.APPLIED)
+                        progress.console.print(f"  [green]✓ {job.company} — Applied successfully[/green]")
+                    else:
+                        self.sheets.update_job_status(
+                            job, ApplicationStatus.ERROR, Notes="Application agent returned failure"
+                        )
+                        progress.console.print(f"  [red]✗ {job.company} — Application failed[/red]")
+                except Exception as e:
+                    self.sheets.update_job_status(job, ApplicationStatus.ERROR, Notes=str(e))
+                    progress.console.print(f"  [red]✗ {job.company} — Error: {e}[/red]")
+                progress.advance(task)
 
     def run_process(self):
         """Process LinkedIn URLs manually added to the Google Sheet."""
@@ -131,9 +148,22 @@ class Orchestrator:
             if not logged_in:
                 raise RuntimeError("LinkedIn login failed — check credentials in .env")
 
-            for row_num, url in manual_rows:
-                console.print(f"\n  [{manual_rows.index((row_num, url)) + 1}/{len(manual_rows)}] {url}")
+            progress = Progress(
+                SpinnerColumn(),
+                TextColumn("[progress.description]{task.description}"),
+                BarColumn(),
+                TaskProgressColumn(),
+                console=console
+            )
+            def _track_manual():
+                with progress:
+                    task = progress.add_task("[cyan]Processing manual URLs...", total=len(manual_rows))
+                    for row in manual_rows:
+                        progress.update(task, description=f"[cyan]Fetching: {row[1]}")
+                        yield row
+                        progress.advance(task)
 
+            for row_num, url in _track_manual():
                 # Extract numeric job ID from the URL slug
                 clean_url = url.split("?")[0].rstrip("/")
                 last_seg = clean_url.split("/")[-1]

@@ -16,7 +16,7 @@ def _require(key: str) -> str:
 
 @dataclass
 class Config:
-    groq_api_key: str
+    deepseek_api_key: str
     google_credentials_path: str
     google_sheet_url: str
     linkedin_email: str
@@ -35,7 +35,7 @@ class Config:
     @classmethod
     def load(cls) -> "Config":
         return cls(
-            groq_api_key=_require("GROQ_API_KEY"),
+            deepseek_api_key=_require("DEEPSEEK_API_KEY"),
             google_credentials_path=os.getenv(
                 "GOOGLE_CREDENTIALS_PATH",
                 "credentials/google_service_account.json",
@@ -52,7 +52,7 @@ class Config:
             headless_browser=os.getenv("HEADLESS_BROWSER", "false").lower() == "true",
             request_delay_min=float(os.getenv("REQUEST_DELAY_MIN", "2.0")),
             request_delay_max=float(os.getenv("REQUEST_DELAY_MAX", "5.0")),
-            model=os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile"),
+            model=os.getenv("DEEPSEEK_MODEL", "deepseek-v4-flash"),
         )
 
     def override(self, **kwargs) -> "Config":

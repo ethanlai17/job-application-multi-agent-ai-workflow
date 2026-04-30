@@ -20,6 +20,8 @@ from pathlib import Path
 from typing import Optional
 
 from openai import OpenAI
+from tenacity import retry, retry_if_exception, stop_after_attempt, wait_fixed
+from rich import print as rprint
 
 _LIBRARY_PATH = Path(__file__).parent.parent / "data" / "keyword_library.json"
 
@@ -203,6 +205,16 @@ def check_missing_jd_keywords(cv_sections: dict, jd_matched: list[dict]) -> list
 
 # ── LLM extraction (used only to discover new keywords not in vocabulary) ────
 
+def _is_503_error(e: Exception) -> bool:
+    return "503" in str(e) or "service_unavailable" in str(e).lower()
+
+@retry(
+    wait=wait_fixed(2),
+    stop=stop_after_attempt(15),
+    retry=retry_if_exception(_is_503_error),
+    before_sleep=lambda retry_state: rprint(f"  [yellow]API Error. Retrying in 2 seconds... (Attempt {retry_state.attempt_number}/15)[/yellow]"),
+    reraise=True
+)
 def discover_new_keywords(jd_text: str, client: OpenAI, model: str) -> list[dict]:
     """
     Ask the LLM for keywords that might not be in the vocabulary yet.
@@ -227,13 +239,13 @@ JOB DESCRIPTION:
 
     response = client.chat.completions.create(
         model=model,
-        max_tokens=400,
         messages=[
             {"role": "system", "content": "Return only valid JSON. No markdown."},
             {"role": "user", "content": prompt},
         ],
+        response_format={"type": "json_object"},
     )
-    content = response.choices[0].message.content.strip()
+    content = (response.choices[0].message.content or "").strip()
     content = re.sub(r"^```(?:json)?\s*", "", content)
     content = re.sub(r"\s*```$", "", content)
     try:

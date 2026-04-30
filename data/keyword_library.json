@@ -1,29 +1,29 @@
 {
   "metadata": {
     "last_updated": "2026-04-30",
-    "total_jds_processed": 29,
+    "total_jds_processed": 31,
     "popularity_threshold": 2
   },
   "keywords": {
     "KPIs (Key Performance Indicators)": {
       "category": "methodology",
-      "count": 4
+      "count": 5
     },
     "Roadmapping": {
       "category": "skill",
-      "count": 25
+      "count": 27
     },
     "Prioritisation": {
       "category": "skill",
-      "count": 22
+      "count": 23
     },
     "Cross-functional collaboration": {
       "category": "skill",
-      "count": 18
+      "count": 19
     },
     "Metrics & success criteria": {
       "category": "skill",
-      "count": 14
+      "count": 15
     },
     "Problem definition": {
       "category": "skill",
@@ -35,7 +35,7 @@
     },
     "Agile": {
       "category": "methodology",
-      "count": 12
+      "count": 14
     },
     "Jobs to Be Done (JTBD)": {
       "category": "methodology",
@@ -51,7 +51,7 @@
     },
     "Stakeholder management": {
       "category": "skill",
-      "count": 19
+      "count": 20
     },
     "User research": {
       "category": "skill",
@@ -59,11 +59,11 @@
     },
     "Requirements definition": {
       "category": "skill",
-      "count": 16
+      "count": 18
     },
     "Experimentation": {
       "category": "practice",
-      "count": 5
+      "count": 6
     },
     "Data-driven decision-making": {
       "category": "practice",
@@ -83,7 +83,7 @@
     },
     "Go-to-market": {
       "category": "skill",
-      "count": 3
+      "count": 4
     },
     "Fintech": {
       "category": "domain",
@@ -91,7 +91,7 @@
     },
     "Payments": {
       "category": "domain",
-      "count": 6
+      "count": 7
     },
     "B2B SaaS": {
       "category": "domain",
@@ -107,7 +107,7 @@
     },
     "Product strategy": {
       "category": "skill",
-      "count": 10
+      "count": 11
     },
     "Prototyping": {
       "category": "practice",
@@ -115,7 +115,7 @@
     },
     "Backlog management": {
       "category": "skill",
-      "count": 5
+      "count": 6
     },
     "A/B testing": {
       "category": "practice",
@@ -143,11 +143,11 @@
     },
     "Product discovery": {
       "category": "skill",
-      "count": 1
+      "count": 2
     },
     "Mobile": {
       "category": "domain",
-      "count": 10
+      "count": 11
     },
     "Design Thinking": {
       "category": "methodology",
@@ -196,6 +196,10 @@
     "Travel domain expertise": {
       "category": "domain",
       "count": 2
+    },
+    "Python": {
+      "category": "tool",
+      "count": 1
     }
   }
 }
