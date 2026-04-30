@@ -59,6 +59,14 @@ _LANGNOTE_PROJECT = {
     ],
 }
 
+# Fixed job title/company/dates — the LLM only controls bullet selection, never these fields.
+_WORK_EXPERIENCE_FIXED = [
+    {"title": "Senior Technical Product Manager", "company": "TUI UK",        "dates": "Oct 2022 – Present"},
+    {"title": "Technical Product Manager",        "company": "Inspectorio",   "dates": "Dec 2020 – Feb 2022"},
+    {"title": "Technical Business Analyst",       "company": "FPT Software",  "dates": "Jan – Dec 2020"},
+    {"title": "Account Manager",                  "company": "Carousell",     "dates": "Jul – Dec 2019"},
+]
+
 # ── CV reading ────────────────────────────────────────────────────────────────
 
 def read_cv(path: str) -> str:
@@ -135,7 +143,11 @@ Return ONLY a valid JSON object — no markdown fences, no explanation — match
 
 RULES:
 
-1. work_experience — include ALL 4 jobs (TUI UK, Inspectorio, FPT Software, Carousell), newest first.
+1. work_experience — include ALL 4 jobs in this EXACT order with these EXACT titles (do not change them):
+   1. "Senior Technical Product Manager" at "TUI UK",  Oct 2022 – Present
+   2. "Technical Product Manager" at "Inspectorio",    Dec 2020 – Feb 2022
+   3. "Technical Business Analyst" at "FPT Software",  Jan – Dec 2020
+   4. "Account Manager" at "Carousell",                Jul – Dec 2019
    - Select 3–5 bullets per job that best match the JD.
    - ALWAYS preserve the original metric/outcome (€ amount, %, hours saved, etc.) — never strip numbers.
    - Keep the original sentence structure; you may:
@@ -193,7 +205,20 @@ Full Job Description:
     # Strip markdown code fences if the model wraps with them
     content = re.sub(r"^```(?:json)?\s*", "", content)
     content = re.sub(r"\s*```$", "", content)
-    return json.loads(content)
+    result = json.loads(content)
+
+    # Enforce fixed titles/companies/dates — LLM controls bullets only.
+    jobs = result.get("work_experience", [])
+    for i, fixed in enumerate(_WORK_EXPERIENCE_FIXED):
+        if i < len(jobs):
+            jobs[i]["title"] = fixed["title"]
+            jobs[i]["company"] = fixed["company"]
+            jobs[i]["dates"] = fixed["dates"]
+        else:
+            jobs.append({**fixed, "bullets": []})
+    result["work_experience"] = jobs
+
+    return result
 
 
 def generate_cover_letter(
