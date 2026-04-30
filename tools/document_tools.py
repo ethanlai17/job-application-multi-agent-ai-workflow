@@ -47,7 +47,7 @@ _NEW_PROJECT = {
         (
             "Built a multi-agent Python system orchestrating LinkedIn job search, "
             "Google Sheets tracking, tailored CV/cover letter generation, and automated "
-            "form filling via Playwright and Groq LLM"
+            "form filling via Playwright and DeepSeek V4 LLM"
         ),
         (
             "Designed a human-in-the-loop pipeline: agents search and generate documents, "
