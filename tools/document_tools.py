@@ -16,7 +16,7 @@ _EDUCATION = [
         "title": "MSc. Information Systems (IS) - The University of Sheffield",
         "detail": (
             "Postgraduate merit scholarship. "
-            "Coursework: User-centred design (UI/UX), Database design, IS modelling, Python"
+            "Coursework: User-centred design, database design, IS modelling, Python"
         ),
     },
     {
@@ -152,6 +152,9 @@ RULES:
    If TUI UK and Inspectorio bullets already cover the JD requirements comprehensively,
    OMIT Carousell and give TUI UK and Inspectorio 4–5 bullets each instead.
    - Select 3–5 bullets per job that best match the JD.
+   - Keep each bullet to at most 2 lines. If a bullet wraps to a 2nd line, ensure the last line
+     has at least 5 words — never leave a single word or very short phrase alone on the last line.
+     Trim or rephrase the end of any bullet that would otherwise orphan a word.
    - ALWAYS preserve the original metric/outcome (€ amount, %, hours saved, etc.) — never strip numbers.
    - Keep the original sentence structure; you may:
        • swap a word for a JD keyword (e.g. "iterative" → "test-learn-iterate", "data" → "data-driven")
@@ -182,7 +185,9 @@ RULES:
    - Merge with Ethan's existing skills, placing JD-matched skills first.
    - "proficiency" = methodologies, frameworks, soft skills, PM competencies
    - "tools" = named software tools and platforms from both the JD and Ethan's original CV
-   - Keep each value (proficiency / tools) to ONE compact comma-separated line — no repetition, no padding
+   - Keep each value (proficiency / tools) to ONE compact comma-separated line — no repetition, no padding.
+     Limit to 5–7 items each; stop adding items before the line would orphan a single word on the next line.
+     Rule of thumb: proficiency ≤ 100 characters, tools ≤ 85 characters.
    - Spell out abbreviations on first use:
        write "Objectives and Key Results (OKRs)" not just "OKRs"
        write "Key Performance Indicators (KPIs)" not just "KPIs"
@@ -289,7 +294,7 @@ def render_cv_pdf(sections: dict, output_path: str) -> str:
     from reportlab.lib.pagesizes import A4
     from reportlab.lib.styles import ParagraphStyle
     from reportlab.lib import colors
-    from reportlab.lib.enums import TA_CENTER, TA_RIGHT, TA_JUSTIFY
+    from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT, TA_JUSTIFY
     from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, HRFlowable
 
     _DOC_KWARGS = dict(
@@ -328,12 +333,16 @@ def render_cv_pdf(sections: dict, output_path: str) -> str:
         title_row_s = s("TitleRow", fontName="Helvetica-Bold", fontSize=10,
                         leading=12 * scale, spaceAfter=1 * scale,
                         tabStops=[(content_w, TA_RIGHT)])
-        # Hanging indent so • aligns with section headers and wrapped text indents under the bullet text
+        # Hanging indent: • at the left margin, tab stop at 12pt snaps text to the continuation
+        # column — so the first-line text start and all wrapped lines are at exactly the same x.
+        # Tab (&#9;) is a fixed-width stop, so justification never stretches the gap after •.
         bullet_s  = s("Bullet",  fontSize=10, leading=12 * scale, leftIndent=12,
-                      firstLineIndent=-12, spaceAfter=0.5 * scale, alignment=TA_JUSTIFY)
+                      firstLineIndent=-12, spaceAfter=0.5 * scale, alignment=TA_JUSTIFY,
+                      tabStops=[(12, TA_LEFT)])
         edu_s     = s("Edu",     fontName="Helvetica-Bold", fontSize=10, leading=12 * scale)
         edu_det_s = s("EduDet",  fontSize=10, leading=12 * scale, leftIndent=12,
-                      firstLineIndent=-12, spaceAfter=2 * scale, alignment=TA_JUSTIFY)
+                      firstLineIndent=-12, spaceAfter=2 * scale, alignment=TA_JUSTIFY,
+                      tabStops=[(12, TA_LEFT)])
 
         story = []
 
@@ -358,7 +367,7 @@ def render_cv_pdf(sections: dict, output_path: str) -> str:
 
         def add_bullets(bullets):
             for b in bullets:
-                story.append(Paragraph(f"• {b}", bullet_s))
+                story.append(Paragraph(f"•&#9;{b}", bullet_s))
 
         # ── Work Experience ───────────────────────────────────────────────────
         section_header("WORK EXPERIENCE")
@@ -383,7 +392,7 @@ def render_cv_pdf(sections: dict, output_path: str) -> str:
         for edu in _EDUCATION:
             story.append(Paragraph(edu["title"], edu_s))
             if edu["detail"]:
-                story.append(Paragraph(f"• {edu['detail']}", edu_det_s))
+                story.append(Paragraph(f"•&#9;{edu['detail']}", edu_det_s))
             else:
                 story.append(Spacer(1, 4 * scale))
 
@@ -393,10 +402,10 @@ def render_cv_pdf(sections: dict, output_path: str) -> str:
         if isinstance(skills, dict):
             if skills.get("proficiency"):
                 story.append(Paragraph(
-                    f"• <b>Proficiency:</b> {skills['proficiency']}", bullet_s))
+                    f"•&#9;<b>Proficiency:</b> {skills['proficiency']}", bullet_s))
             if skills.get("tools"):
                 story.append(Paragraph(
-                    f"• <b>Tools:</b> {skills['tools']}", bullet_s))
+                    f"•&#9;<b>Tools:</b> {skills['tools']}", bullet_s))
         elif isinstance(skills, list):
             add_bullets(skills)
 
