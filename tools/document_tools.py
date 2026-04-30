@@ -143,11 +143,14 @@ Return ONLY a valid JSON object — no markdown fences, no explanation — match
 
 RULES:
 
-1. work_experience — include ALL 4 jobs in this EXACT order with these EXACT titles (do not change them):
+1. work_experience — MUST include the first 3 jobs in this EXACT order with these EXACT titles:
    1. "Senior Technical Product Manager" at "TUI UK",  Oct 2022 – Present
    2. "Technical Product Manager" at "Inspectorio",    Dec 2020 – Feb 2022
    3. "Technical Business Analyst" at "FPT Software",  Jan – Dec 2020
-   4. "Account Manager" at "Carousell",                Jul – Dec 2019
+   The 4th job "Account Manager" at "Carousell" (Jul – Dec 2019) is OPTIONAL:
+   include it ONLY if it adds clear value for this specific JD.
+   If TUI UK and Inspectorio bullets already cover the JD requirements comprehensively,
+   OMIT Carousell and give TUI UK and Inspectorio 4–5 bullets each instead.
    - Select 3–5 bullets per job that best match the JD.
    - ALWAYS preserve the original metric/outcome (€ amount, %, hours saved, etc.) — never strip numbers.
    - Keep the original sentence structure; you may:
@@ -214,13 +217,14 @@ Full Job Description:
     result = json.loads(content)
 
     # Enforce fixed titles/companies/dates — LLM controls bullets only.
+    # First 3 jobs are mandatory; Carousell (4th) is optional — only added if LLM included it.
     jobs = result.get("work_experience", [])
     for i, fixed in enumerate(_WORK_EXPERIENCE_FIXED):
         if i < len(jobs):
             jobs[i]["title"] = fixed["title"]
             jobs[i]["company"] = fixed["company"]
             jobs[i]["dates"] = fixed["dates"]
-        else:
+        elif i < 3:
             jobs.append({**fixed, "bullets": []})
     result["work_experience"] = jobs
 
@@ -297,7 +301,7 @@ def render_cv_pdf(sections: dict, output_path: str) -> str:
 
         ATS compliance:
         - All body text >= 10pt (ATS minimum)
-        - No Table elements — title rows use stacked Paragraphs
+        - No Table elements — title rows use a single Paragraph with a right-aligned tab stop
         - Standard section headings (WORK EXPERIENCE, PROJECTS, EDUCATION, SKILLS)
         - Helvetica font (ATS-approved)
         - Justified bullets for clean text extraction
@@ -309,6 +313,9 @@ def render_cv_pdf(sections: dict, output_path: str) -> str:
             defaults.update(kw)
             return ParagraphStyle(name, **defaults)
 
+        # Usable content width inside the page margins
+        content_w = A4[0] - 38 - 38
+
         # Header — fixed, not scaled
         name_s    = s("Name",    fontName="Helvetica-Bold", fontSize=16, leading=20,
                       alignment=TA_CENTER, spaceAfter=1)
@@ -317,15 +324,16 @@ def render_cv_pdf(sections: dict, output_path: str) -> str:
         # Scaled body styles — all >= 10pt per ATS guidelines
         section_s = s("Section", fontName="Helvetica-Bold", fontSize=11, leading=13,
                       spaceBefore=5 * scale, spaceAfter=1 * scale)
-        title_s   = s("Title",   fontName="Helvetica-Bold", fontSize=10, leading=12 * scale,
-                      spaceAfter=0)
-        dates_s   = s("Dates",   fontSize=10, leading=11 * scale,
-                      alignment=TA_RIGHT, spaceAfter=1 * scale)
-        bullet_s  = s("Bullet",  fontSize=10, leading=12 * scale, leftIndent=10,
-                      spaceAfter=0.5 * scale, alignment=TA_JUSTIFY)
+        # Title row: bold title left, dates right — same line via tab stop (no Table needed)
+        title_row_s = s("TitleRow", fontName="Helvetica-Bold", fontSize=10,
+                        leading=12 * scale, spaceAfter=1 * scale,
+                        tabStops=[(content_w, TA_RIGHT)])
+        # Hanging indent so • aligns with section headers and wrapped text indents under the bullet text
+        bullet_s  = s("Bullet",  fontSize=10, leading=12 * scale, leftIndent=12,
+                      firstLineIndent=-12, spaceAfter=0.5 * scale, alignment=TA_JUSTIFY)
         edu_s     = s("Edu",     fontName="Helvetica-Bold", fontSize=10, leading=12 * scale)
-        edu_det_s = s("EduDet",  fontSize=10, leading=12 * scale, leftIndent=10,
-                      spaceAfter=2 * scale, alignment=TA_JUSTIFY)
+        edu_det_s = s("EduDet",  fontSize=10, leading=12 * scale, leftIndent=12,
+                      firstLineIndent=-12, spaceAfter=2 * scale, alignment=TA_JUSTIFY)
 
         story = []
 
@@ -341,10 +349,12 @@ def render_cv_pdf(sections: dict, output_path: str) -> str:
                                     spaceAfter=2 * scale))
 
         def title_row(label, dates):
-            # ATS-friendly: two stacked Paragraphs instead of a Table.
-            # Title bold left-aligned; dates right-aligned on its own line.
-            story.append(Paragraph(f"<b>{label}</b>", title_s))
-            story.append(Paragraph(dates, dates_s))
+            # Single Paragraph with right-aligned tab stop — title left, dates right on the same line.
+            # ATS-friendly (no Table) and reads naturally in linear text extraction.
+            story.append(Paragraph(
+                f'<b>{label}</b>&#9;<font name="Helvetica">{dates}</font>',
+                title_row_s,
+            ))
 
         def add_bullets(bullets):
             for b in bullets:
