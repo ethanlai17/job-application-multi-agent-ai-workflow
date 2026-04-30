@@ -180,6 +180,12 @@ RULES:
    - "proficiency" = methodologies, frameworks, soft skills, PM competencies
    - "tools" = named software tools and platforms from both the JD and Ethan's original CV
    - Keep each value (proficiency / tools) to ONE compact comma-separated line — no repetition, no padding
+   - Spell out abbreviations on first use:
+       write "Objectives and Key Results (OKRs)" not just "OKRs"
+       write "Key Performance Indicators (KPIs)" not just "KPIs"
+       write "Jobs to Be Done (JTBD)" not just "JTBD"
+   - Avoid vague language: never write "various", "several", "multiple", or "etc."
+     Replace with specific counts or named examples from the original CV.
 {_popular_keywords_rule(popular_keywords)}
 4. Return ONLY the JSON — nothing else.
 
@@ -280,47 +286,46 @@ def render_cv_pdf(sections: dict, output_path: str) -> str:
     from reportlab.lib.styles import ParagraphStyle
     from reportlab.lib import colors
     from reportlab.lib.enums import TA_CENTER, TA_RIGHT, TA_JUSTIFY
-    from reportlab.platypus import (
-        SimpleDocTemplate, Paragraph, Spacer, HRFlowable, Table, TableStyle,
-    )
+    from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, HRFlowable
 
-    W = A4[0] - 76  # usable content width
     _DOC_KWARGS = dict(
         pagesize=A4, leftMargin=38, rightMargin=38, topMargin=28, bottomMargin=24,
     )
 
     def _build_story(scale: float) -> list:
-        """Build the platypus story with vertical spacing multiplied by scale."""
+        """Build the platypus story with vertical spacing multiplied by scale.
+
+        ATS compliance:
+        - All body text >= 10pt (ATS minimum)
+        - No Table elements — title rows use stacked Paragraphs
+        - Standard section headings (WORK EXPERIENCE, PROJECTS, EDUCATION, SKILLS)
+        - Helvetica font (ATS-approved)
+        - Justified bullets for clean text extraction
+        """
 
         def s(name, **kw):
-            defaults = dict(fontName="Helvetica", fontSize=8.8, leading=10.5 * scale)
+            # Base defaults: 10pt body, 12pt leading (ATS minimum font size)
+            defaults = dict(fontName="Helvetica", fontSize=10, leading=12 * scale)
             defaults.update(kw)
             return ParagraphStyle(name, **defaults)
 
-        # Fixed header styles — not scaled (always the same regardless of content)
-        name_s    = s("Name",    fontName="Helvetica-Bold", fontSize=15, leading=19,
+        # Header — fixed, not scaled
+        name_s    = s("Name",    fontName="Helvetica-Bold", fontSize=16, leading=20,
                       alignment=TA_CENTER, spaceAfter=1)
-        contact_s = s("Contact", fontSize=7.8, leading=9.5, alignment=TA_CENTER, spaceAfter=3)
+        contact_s = s("Contact", fontSize=9, leading=11, alignment=TA_CENTER, spaceAfter=3)
 
-        # Scaled body styles
-        section_s = s("Section", fontName="Helvetica-Bold", fontSize=9.2, leading=11,
-                      spaceBefore=4 * scale, spaceAfter=1 * scale)
-        title_s   = s("Title",   fontName="Helvetica-Bold", fontSize=8.8, leading=10.5 * scale)
-        dates_s   = s("Dates",   fontSize=8.2, leading=10.5 * scale, alignment=TA_RIGHT)
-        bullet_s  = s("Bullet",  fontSize=8.2, leading=10.5 * scale, leftIndent=9,
-                      spaceAfter=0.3 * scale, alignment=TA_JUSTIFY)
-        edu_s     = s("Edu",     fontName="Helvetica-Bold", fontSize=8.8, leading=10.5 * scale)
-        edu_det_s = s("EduDet",  fontSize=8.2, leading=10.5 * scale, leftIndent=9,
-                      spaceAfter=1.5 * scale, alignment=TA_JUSTIFY)
-
-        _table_style = TableStyle([
-            ("LEFTPADDING",   (0, 0), (-1, -1), 0),
-            ("RIGHTPADDING",  (0, 0), (-1, -1), 0),
-            ("TOPPADDING",    (0, 0), (-1, -1), 2 * scale),
-            ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
-            ("VALIGN",        (0, 0), (-1, -1), "TOP"),
-            ("ALIGN",         (1, 0), (1, 0),   "RIGHT"),
-        ])
+        # Scaled body styles — all >= 10pt per ATS guidelines
+        section_s = s("Section", fontName="Helvetica-Bold", fontSize=11, leading=13,
+                      spaceBefore=5 * scale, spaceAfter=1 * scale)
+        title_s   = s("Title",   fontName="Helvetica-Bold", fontSize=10, leading=12 * scale,
+                      spaceAfter=0)
+        dates_s   = s("Dates",   fontSize=10, leading=11 * scale,
+                      alignment=TA_RIGHT, spaceAfter=1 * scale)
+        bullet_s  = s("Bullet",  fontSize=10, leading=12 * scale, leftIndent=10,
+                      spaceAfter=0.5 * scale, alignment=TA_JUSTIFY)
+        edu_s     = s("Edu",     fontName="Helvetica-Bold", fontSize=10, leading=12 * scale)
+        edu_det_s = s("EduDet",  fontSize=10, leading=12 * scale, leftIndent=10,
+                      spaceAfter=2 * scale, alignment=TA_JUSTIFY)
 
         story = []
 
@@ -336,13 +341,10 @@ def render_cv_pdf(sections: dict, output_path: str) -> str:
                                     spaceAfter=2 * scale))
 
         def title_row(label, dates):
-            t = Table(
-                [[Paragraph(f"<b>{label}</b>", title_s), Paragraph(dates, dates_s)]],
-                colWidths=[W * 0.73, W * 0.27],
-                hAlign="LEFT",
-            )
-            t.setStyle(_table_style)
-            story.append(t)
+            # ATS-friendly: two stacked Paragraphs instead of a Table.
+            # Title bold left-aligned; dates right-aligned on its own line.
+            story.append(Paragraph(f"<b>{label}</b>", title_s))
+            story.append(Paragraph(dates, dates_s))
 
         def add_bullets(bullets):
             for b in bullets:
@@ -354,17 +356,17 @@ def render_cv_pdf(sections: dict, output_path: str) -> str:
             label = f"{job['title']} - {job['company']}"
             title_row(label, job.get("dates", ""))
             add_bullets(job.get("bullets", []))
-            story.append(Spacer(1, 2 * scale))
+            story.append(Spacer(1, 3 * scale))
 
-        # ── Project Experience ────────────────────────────────────────────────
-        section_header("PROJECT EXPERIENCE")
+        # ── Projects ─────────────────────────────────────────────────────────
+        section_header("PROJECTS")
         for proj in sections.get("projects", [_NEW_PROJECT]):
             label = proj["name"]
             if proj.get("subtitle"):
                 label = f"{proj['subtitle']} - {proj['name']}"
             title_row(label, proj.get("dates", ""))
             add_bullets(proj.get("bullets", []))
-            story.append(Spacer(1, 2 * scale))
+            story.append(Spacer(1, 3 * scale))
 
         # ── Education (fixed) ────────────────────────────────────────────────
         section_header("EDUCATION")
@@ -373,7 +375,7 @@ def render_cv_pdf(sections: dict, output_path: str) -> str:
             if edu["detail"]:
                 story.append(Paragraph(f"• {edu['detail']}", edu_det_s))
             else:
-                story.append(Spacer(1, 3 * scale))
+                story.append(Spacer(1, 4 * scale))
 
         # ── Skills ───────────────────────────────────────────────────────────
         section_header("SKILLS")

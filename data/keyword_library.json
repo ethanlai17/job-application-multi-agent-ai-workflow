@@ -1,29 +1,29 @@
 {
   "metadata": {
-    "last_updated": "2026-04-29",
-    "total_jds_processed": 21,
+    "last_updated": "2026-04-30",
+    "total_jds_processed": 23,
     "popularity_threshold": 2
   },
   "keywords": {
-    "KPIs": {
+    "KPIs (Key Performance Indicators)": {
       "category": "methodology",
       "count": 4
     },
     "Roadmapping": {
       "category": "skill",
-      "count": 17
+      "count": 19
     },
     "Prioritisation": {
       "category": "skill",
-      "count": 14
+      "count": 16
     },
     "Cross-functional collaboration": {
       "category": "skill",
-      "count": 11
+      "count": 12
     },
     "Metrics & success criteria": {
       "category": "skill",
-      "count": 7
+      "count": 8
     },
     "Problem definition": {
       "category": "skill",
@@ -37,7 +37,7 @@
       "category": "methodology",
       "count": 12
     },
-    "JTBD": {
+    "Jobs to Be Done (JTBD)": {
       "category": "methodology",
       "count": 1
     },
@@ -51,7 +51,7 @@
     },
     "Stakeholder management": {
       "category": "skill",
-      "count": 11
+      "count": 13
     },
     "User research": {
       "category": "skill",
@@ -59,7 +59,7 @@
     },
     "Requirements definition": {
       "category": "skill",
-      "count": 9
+      "count": 10
     },
     "Experimentation": {
       "category": "practice",
@@ -67,7 +67,7 @@
     },
     "Data-driven decision-making": {
       "category": "practice",
-      "count": 3
+      "count": 4
     },
     "UX design": {
       "category": "practice",
@@ -87,7 +87,7 @@
     },
     "Fintech": {
       "category": "domain",
-      "count": 2
+      "count": 3
     },
     "Payments": {
       "category": "domain",
@@ -101,7 +101,7 @@
       "category": "methodology",
       "count": 1
     },
-    "OKRs": {
+    "OKRs (Objectives and Key Results)": {
       "category": "methodology",
       "count": 2
     },
@@ -119,7 +119,7 @@
     },
     "A/B testing": {
       "category": "practice",
-      "count": 1
+      "count": 2
     },
     "User journey mapping": {
       "category": "practice",
@@ -139,7 +139,7 @@
     },
     "E-commerce": {
       "category": "domain",
-      "count": 1
+      "count": 3
     },
     "Product discovery": {
       "category": "skill",
@@ -147,7 +147,7 @@
     },
     "Mobile": {
       "category": "domain",
-      "count": 2
+      "count": 4
     },
     "Design Thinking": {
       "category": "methodology",
@@ -159,6 +159,14 @@
     },
     "Lean": {
       "category": "methodology",
+      "count": 1
+    },
+    "SQL": {
+      "category": "tool",
+      "count": 1
+    },
+    "Marketplace": {
+      "category": "domain",
       "count": 1
     }
   }
