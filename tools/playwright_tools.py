@@ -1,6 +1,5 @@
 import asyncio
 import base64
-import re
 from pathlib import Path
 from urllib.parse import quote_plus
 
@@ -100,18 +99,10 @@ async def search_linkedin_jobs(
     await session.random_delay()
     await session.check_blocked()
 
-    # Dismiss cookie consent banner if present (use JS click to avoid overlay timeouts)
+    # Wait for job cards to render (member view uses li[data-occludable-job-id])
+    _CARD_SEL = "li[data-occludable-job-id]"
     try:
-        accept_btn = await session.page.query_selector('button[action-type="ACCEPT"]')
-        if accept_btn:
-            await session.page.evaluate("btn => btn.click()", accept_btn)
-            await session.page.wait_for_timeout(1000)
-    except Exception:
-        pass
-
-    # Wait for job cards to render (LinkedIn public page)
-    try:
-        await session.page.wait_for_selector("div.base-card", timeout=10000)
+        await session.page.wait_for_selector(_CARD_SEL, timeout=10000)
     except Exception:
         pass
     await session.human_scroll(600)
@@ -121,41 +112,39 @@ async def search_linkedin_jobs(
     seen_ids: set[str] = set()
 
     while len(jobs) < max_results:
-        cards = await session.page.query_selector_all("div.base-card")
+        cards = await session.page.query_selector_all(_CARD_SEL)
 
         for card in cards:
             if len(jobs) >= max_results:
                 break
             try:
-                # Job URL — on the full-link anchor
-                link_el = await card.query_selector("a.base-card__full-link, a[href*='/jobs/view/']")
-                href = await link_el.get_attribute("href") if link_el else ""
-                if not href:
-                    continue
-
-                # Clean URL and extract numeric job ID.
-                # LinkedIn URLs: /jobs/view/title-at-company-4067388618 (slug+id)
-                # or legacy:     /jobs/view/4067388618 (pure id)
-                clean_url = href.split("?")[0].rstrip("/")
-                if not clean_url.startswith("http"):
-                    clean_url = "https://www.linkedin.com" + clean_url
-                last_seg = clean_url.split("/")[-1]
-                if last_seg.isdigit():
-                    job_id = last_seg
-                else:
-                    m = re.search(r"-(\d+)$", last_seg)
-                    job_id = m.group(1) if m else ""
+                job_id = await card.get_attribute("data-occludable-job-id") or ""
                 if not job_id or job_id in seen_ids:
                     continue
                 seen_ids.add(job_id)
 
-                # Title, company, location use the public page's stable class names
-                job_title = await _extract_text(card, ["h3.base-search-card__title"])
+                link_el = await card.query_selector("a[href*='/jobs/view/']")
+                clean_url = "https://www.linkedin.com/jobs/view/" + job_id + "/"
+
+                job_title = ""
+                if link_el:
+                    job_title = (await link_el.get_attribute("aria-label") or "").strip()
+                    if not job_title:
+                        job_title = (await link_el.inner_text()).strip()
+                    job_title = job_title.removesuffix(" with verification").strip()
+
                 company = await _extract_text(card, [
-                    "h4.base-search-card__subtitle a",
-                    "h4.base-search-card__subtitle",
+                    ".artdeco-entity-lockup__subtitle",
+                    ".job-card-container__company-name",
                 ])
-                loc = await _extract_text(card, ["span.job-search-card__location"])
+                loc = await _extract_text(card, [
+                    ".artdeco-entity-lockup__caption",
+                    ".job-card-container__metadata-item",
+                ])
+                salary = await _extract_text(card, [
+                    ".job-card-container__salary-info",
+                    ".compensation-text",
+                ])
 
                 jobs.append({
                     "linkedin_job_id": job_id,
@@ -163,23 +152,21 @@ async def search_linkedin_jobs(
                     "company": company,
                     "url": clean_url,
                     "location": loc,
-                    "salary": "",
+                    "salary": salary,
                 })
             except Exception:
                 continue
 
-        # Next page button on public LinkedIn jobs page
-        next_btn = await session.page.query_selector(
-            "button[aria-label='View next page'], "
-            "button[aria-label='Next'], "
-            "li[data-test-pagination-page-btn].selected + li button"
-        )
+        next_btn = await session.page.query_selector("button[aria-label='View next page']")
         if not next_btn or len(jobs) >= max_results:
             break
         await next_btn.scroll_into_view_if_needed()
         await next_btn.click()
         await session.random_delay()
-        await session.page.wait_for_selector("div.base-card", timeout=10000)
+        try:
+            await session.page.wait_for_selector(_CARD_SEL, timeout=10000)
+        except Exception:
+            pass
         await session.human_scroll(400)
 
     return jobs
@@ -202,17 +189,13 @@ async def get_job_details(session: BrowserSession, url: str) -> dict:
     await session.random_delay()
     await session.check_blocked()
 
-    # Wait for job detail content to render (member view or public view selectors)
-    try:
-        await session.page.wait_for_selector(
-            ".jobs-description-content__text, .jobs-box__html-content, "
-            ".description__text, .show-more-less-html, h1",
-            timeout=10000,
-        )
-    except Exception:
-        pass
+    # Scroll to trigger lazy-rendered content (LinkedIn SPA)
+    await session.page.evaluate("window.scrollTo(0, 600)")
+    await session.page.wait_for_timeout(2000)
 
     page_text = await session.page.inner_text("body")
+    page_lower = page_text.lower()
+
     removed_signals = [
         "no longer accepting applications",
         "job may not be valid",
@@ -221,84 +204,69 @@ async def get_job_details(session: BrowserSession, url: str) -> dict:
         "this job is no longer available",
         "job posting has expired",
     ]
-    if any(sig in page_text.lower() for sig in removed_signals):
+    if any(sig in page_lower for sig in removed_signals):
         raise JobUnavailableError(f"Job posting unavailable: {url}")
 
-    # Expand "Show more" if present (member view and public view buttons)
-    try:
-        show_more = await session.page.query_selector(
-            "button.jobs-description__footer-button, "
-            "button.show-more-less-html__button"
-        )
-        if show_more:
-            await session.page.evaluate("btn => btn.click()", show_more)
-            await session.page.wait_for_timeout(500)
-    except Exception:
-        pass
-
+    # Extract description: everything from "About the job" to the next boundary.
+    # LinkedIn's new SPA renders no stable CSS classes, so we rely on text markers.
     description = ""
-    salary = ""
+    desc_start_markers = ["About the job", "About this role", "Job description", "Job Description"]
+    desc_end_markers = [
+        "About the company", "About Hopper", "About us\n", "Similar jobs",
+        "People also viewed", "Meet the team", "How you match",
+    ]
+    for start_marker in desc_start_markers:
+        idx = page_text.find(start_marker)
+        if idx != -1:
+            desc_raw = page_text[idx + len(start_marker):].strip()
+            # Cut at the first end marker
+            for end_marker in desc_end_markers:
+                end_idx = desc_raw.find(end_marker)
+                if end_idx != -1:
+                    desc_raw = desc_raw[:end_idx].strip()
+                    break
+            if len(desc_raw) > 100:
+                description = desc_raw
+                break
 
-    try:
-        desc_el = await session.page.query_selector(
-            ".jobs-description-content__text, "  # member view
-            ".jobs-box__html-content, "          # member view alt
-            ".description__text, "              # public view
-            ".show-more-less-html"              # public view alt
-        )
-        if desc_el:
-            description = (await desc_el.inner_text()).strip()
-    except Exception:
-        pass
-
-    # Skip jobs with no description — likely invalid/removed
     if not description:
         raise JobUnavailableError(f"Empty job description (removed or invalid): {url}")
 
-    # Skip jobs posted by staffing/recruitment agencies
+    # Skip staffing/recruitment agencies
     recruiter_signals = [
-        "staffing and recruiting",
-        "staffing & recruiting",
-        "recruitment agency",
-        "recruiting firm",
-        "executive search",
-        "talent acquisition firm",
-        "we are a recruiter",
-        "our client is",
-        "on behalf of our client",
-        "our client, a",
+        "staffing and recruiting", "staffing & recruiting", "recruitment agency",
+        "recruiting firm", "executive search", "talent acquisition firm",
+        "we are a recruiter", "our client is", "on behalf of our client", "our client, a",
     ]
-    page_lower = page_text.lower()
     if any(sig in page_lower for sig in recruiter_signals):
         raise RecruiterJobError(f"Recruiter/staffing posting skipped: {url}")
 
-    try:
-        salary_el = await session.page.query_selector(".job-details-jobs-unified-top-card__job-insight span")
-        if salary_el:
-            text = (await salary_el.inner_text()).strip()
-            if any(c in text for c in ["£", "$", "€", "salary", "Salary"]):
-                salary = text
-    except Exception:
-        pass
+    # Extract salary from the header block (first ~800 chars, before the description).
+    import re as _re
+    salary = ""
+    header_text = page_text[:800]
+    salary_match = _re.search(
+        r"(?:[\$£€]\s*)?[\d,]+\s*[Kk]?\s*(?:GBP|USD|EUR)"
+        r"(?:\s*/\s*(?:yr|year|mo|month))?"
+        r"(?:\s*[-–]\s*(?:[\$£€]\s*)?[\d,]+\s*[Kk]?\s*(?:GBP|USD|EUR)?(?:\s*/\s*(?:yr|year|mo|month))?)?",
+        header_text,
+    )
+    if not salary_match:
+        # Fallback: £/$/€ + meaningful number (>=4 digits or K suffix) to skip "£0" nav noise
+        salary_match = _re.search(r"[\$£€][\d,]{4,}(?:\s*[Kk])?(?:\s*/\s*(?:yr|year|mo|month))?", header_text)
+        if not salary_match:
+            salary_match = _re.search(r"[\$£€]\d+[Kk]", header_text)
+    if salary_match:
+        salary = salary_match.group(0).strip()
 
-    # Extract title + company (member view and public view selectors)
-    title = await _extract_text(session.page, [
-        "h1.t-24",
-        "h1[class*='job-title']",
-        ".jobs-unified-top-card__job-title h1",
-        ".job-details-jobs-unified-top-card__job-title h1",
-        ".topcard__title",   # public view
-        "h1",
-    ])
-    company = await _extract_text(session.page, [
-        ".jobs-unified-top-card__company-name a",
-        ".job-details-jobs-unified-top-card__company-name a",
-        ".jobs-unified-top-card__primary-description a",
-        "[class*='company-name'] a",
-        "[class*='company-name']",
-        ".topcard__org-name-link",   # public view
-        ".topcard__flavor a",        # public view alt
-    ])
+    # Extract title + company from the page <title> tag ("Job Title | Company | LinkedIn")
+    page_title = await session.page.title()
+    title, company = "", ""
+    if "|" in page_title:
+        parts = [p.strip() for p in page_title.split("|")]
+        title = parts[0] if parts else ""
+        company = parts[1] if len(parts) > 1 else ""
+        company = company.replace(" | LinkedIn", "").strip()
 
     return {
         "job_description": description,
