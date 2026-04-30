@@ -216,6 +216,72 @@ class Orchestrator:
         console.print("\n[italic]Waiting for you to review and approve jobs in Google Sheets...[/italic]")
         console.print("Run [bold cyan]python main.py apply[/bold cyan] when ready.")
 
+    def run_regenerate(self, company: str, title_filter: str | None = None):
+        """Re-scrape and regenerate CV + cover letter for a job already tracked in the sheet."""
+        console.print(f"[bold blue]Regenerating documents for:[/bold blue] {company}" +
+                      (f" / {title_filter}" if title_filter else ""))
+
+        all_jobs = self.sheets.get_all_jobs()
+        matches = [
+            j for j in all_jobs
+            if company.lower() in j.company.lower()
+            and (title_filter is None or title_filter.lower() in j.title.lower())
+        ]
+
+        if not matches:
+            console.print(f"[red]No jobs found matching company '{company}'" +
+                          (f" and title '{title_filter}'" if title_filter else "") + "[/red]")
+            return
+
+        if len(matches) > 1:
+            console.print(f"[yellow]Multiple matches found — use --title to narrow down:[/yellow]")
+            for j in matches:
+                console.print(f"  • {j.title} @ {j.company} (row {j.sheet_row})")
+            return
+
+        job = matches[0]
+        console.print(f"  Found: [bold]{job.title}[/bold] @ {job.company} (row {job.sheet_row})")
+
+        if not job.url:
+            console.print("[red]No LinkedIn URL stored for this job — cannot re-scrape.[/red]")
+            return
+
+        cv_text = self._load_cv()
+        asyncio.run(self._regenerate_async(job, cv_text))
+
+    async def _regenerate_async(self, job: JobListing, cv_text: str):
+        async with BrowserSession(self.config) as session:
+            logged_in = await playwright_tools.linkedin_login(
+                session, self.config.linkedin_email, self.config.linkedin_password
+            )
+            if not logged_in:
+                raise RuntimeError("LinkedIn login failed — check credentials in .env")
+
+            console.print(f"  Scraping: {job.url}")
+            try:
+                details = await playwright_tools.get_job_details(session, job.url)
+            except (JobUnavailableError, RecruiterJobError) as e:
+                console.print(f"  [red]✗ Cannot scrape job: {e}[/red]")
+                return
+            except Exception as e:
+                console.print(f"  [red]✗ Error scraping page: {e}[/red]")
+                return
+
+        job.job_description = details["job_description"]
+        if not job.title:
+            job.title = details.get("title_from_detail", job.title)
+        if not job.company:
+            job.company = details.get("company_from_detail", job.company)
+
+        console.print("  Regenerating CV and cover letter…")
+        try:
+            cv_path, letter_path = self.document.generate(job, cv_text)
+            self.sheets.update_job_links(job, cv_path, letter_path)
+            console.print(f"  [green]✓[/green] CV: {cv_path}")
+            console.print(f"  [green]✓[/green] Cover letter: {letter_path}")
+        except Exception as e:
+            console.print(f"  [red]✗ Doc generation failed: {e}[/red]")
+
     def run_status(self):
         all_jobs = self.sheets.get_all_jobs()
         if not all_jobs:

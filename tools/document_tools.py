@@ -4,6 +4,11 @@ from pathlib import Path
 
 from openai import OpenAI
 
+
+def _clean_bullet(text: str) -> str:
+    """Collapse irregular whitespace in bullet text to single spaces."""
+    return re.sub(r"[ \t]+", " ", text).strip()
+
 # ── Fixed CV content (never modified by LLM) ─────────────────────────────────
 
 _CONTACT = (
@@ -35,7 +40,7 @@ _EDUCATION = [
 _NEW_PROJECT = {
     "name": "Job Application AI Multi-Agent Workflow",
     "subtitle": "Vibe Coding",
-    "dates": "Apr 2025",
+    "dates": "Apr 2026",
     "bullets": [
         (
             "Built a multi-agent Python system orchestrating LinkedIn job search, "
@@ -199,7 +204,7 @@ RULES:
                    "Designed AI-powered personalisation engine via Continuous Discovery, boosting CTR 15% & conversion 3%"
 
 2. projects — include EXACTLY these 2 projects in this order (use verbatim):
-   First: {{"name": "Job Application AI Multi-Agent Workflow", "subtitle": "Vibe Coding", "dates": "Apr 2025",
+   First: {{"name": "Job Application AI Multi-Agent Workflow", "subtitle": "Vibe Coding", "dates": "Apr 2026",
      "bullets": [
        "Built a multi-agent Python system orchestrating LinkedIn job search, Google Sheets tracking, tailored CV/cover letter generation, and automated form filling via Playwright and Groq LLM",
        "Designed a human-in-the-loop pipeline: agents search and generate documents, user reviews and approves roles in Google Sheets, then agents auto-apply"
@@ -213,7 +218,7 @@ RULES:
 3. skills — this is CRITICAL:
    - Read the FULL job description carefully and extract relevant skills, methodologies, frameworks, and tools.
    - Merge with Ethan's existing skills, placing JD-matched skills first.
-   - "proficiency" = methodologies, frameworks, soft skills, PM competencies
+   - "proficiency" = core competencies: methodologies, frameworks, soft skills, PM skills (rendered as "Core Competencies" on the CV — an ATS-standard label)
    - "tools" = named software tools and platforms from both the JD and Ethan's original CV
    - Keep each value (proficiency / tools) to ONE compact comma-separated line — no repetition, no padding.
      Limit to 5–7 items each; stop adding items before the line would orphan a single word on the next line.
@@ -263,6 +268,19 @@ Full Job Description:
         elif i < 3:
             jobs.append({**fixed, "bullets": []})
     result["work_experience"] = jobs
+
+    # Normalise whitespace in every bullet so irregular LLM spacing never
+    # causes inconsistent gaps when rendered (especially under justification).
+    for job in result.get("work_experience", []):
+        job["bullets"] = [_clean_bullet(b) for b in job.get("bullets", [])]
+    for proj in result.get("projects", []):
+        proj["bullets"] = [_clean_bullet(b) for b in proj.get("bullets", [])]
+    skills = result.get("skills", {})
+    if isinstance(skills, dict):
+        if skills.get("proficiency"):
+            skills["proficiency"] = _clean_bullet(skills["proficiency"])
+        if skills.get("tools"):
+            skills["tools"] = _clean_bullet(skills["tools"])
 
     return result
 
@@ -325,7 +343,7 @@ def render_cv_pdf(sections: dict, output_path: str) -> str:
     from reportlab.lib.pagesizes import A4
     from reportlab.lib.styles import ParagraphStyle
     from reportlab.lib import colors
-    from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT, TA_JUSTIFY
+    from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
     from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, HRFlowable
 
     _DOC_KWARGS = dict(
@@ -368,11 +386,11 @@ def render_cv_pdf(sections: dict, output_path: str) -> str:
         # column — so the first-line text start and all wrapped lines are at exactly the same x.
         # Tab (&#9;) is a fixed-width stop, so justification never stretches the gap after •.
         bullet_s  = s("Bullet",  fontSize=10, leading=12 * scale, leftIndent=12,
-                      firstLineIndent=-12, spaceAfter=0.5 * scale, alignment=TA_JUSTIFY,
+                      firstLineIndent=-12, spaceAfter=0.5 * scale, alignment=TA_LEFT,
                       tabStops=[(12, TA_LEFT)])
         edu_s     = s("Edu",     fontName="Helvetica-Bold", fontSize=10, leading=12 * scale)
         edu_det_s = s("EduDet",  fontSize=10, leading=12 * scale, leftIndent=12,
-                      firstLineIndent=-12, spaceAfter=2 * scale, alignment=TA_JUSTIFY,
+                      firstLineIndent=-12, spaceAfter=2 * scale, alignment=TA_LEFT,
                       tabStops=[(12, TA_LEFT)])
 
         story = []
@@ -433,7 +451,7 @@ def render_cv_pdf(sections: dict, output_path: str) -> str:
         if isinstance(skills, dict):
             if skills.get("proficiency"):
                 story.append(Paragraph(
-                    f"•&#9;<b>Proficiency:</b> {skills['proficiency']}", bullet_s))
+                    f"•&#9;<b>Core Competencies:</b> {skills['proficiency']}", bullet_s))
             if skills.get("tools"):
                 story.append(Paragraph(
                     f"•&#9;<b>Tools:</b> {skills['tools']}", bullet_s))

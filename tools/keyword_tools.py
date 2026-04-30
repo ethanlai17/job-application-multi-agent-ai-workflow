@@ -57,11 +57,14 @@ _VOCABULARY: dict[str, tuple[str, list[str]]] = {
     "Product analytics":        ("skill", ["product analytics", "product metrics"]),
     "Competitive analysis":     ("skill", ["competitive analysis", "competitive research", "market research"]),
     "Cross-functional collaboration": ("skill", ["cross-functional", "cross functional"]),
-    "Metrics & success criteria": ("skill", ["success metrics", "north star", "metric"]),
+    "Metrics & success criteria": ("skill", ["success metrics", "north star", "metric", "metrics tracking", "metric tracking"]),
     "Problem definition":       ("skill", ["problem definition", "problem statement"]),
     "Hypothesis validation":    ("skill", ["hypothesis", "validate assumption"]),
-    "Backend systems":          ("skill", ["backend system", "back-end system", "server-side system", "backend architecture"]),
-    "API & system integrations": ("skill", ["third-party integration", "third party integration", "api integration", "system integration", "partner integration"]),
+    "Backend systems":          ("skill", ["backend system", "back-end system", "server-side system", "backend architecture", "backend engineer", "backend service", "backend platform"]),
+    "API & system integrations": ("skill", ["third-party integration", "third party integration", "api integration", "system integration", "partner integration", "external integration", "vendor integration"]),
+    "Machine learning":         ("skill", ["machine learning", "deep learning", "ml model", "neural network", "natural language processing", "nlp model"]),
+    "AI-driven products":       ("skill", ["ai-driven", "ai-powered", "ai-assisted", "ai-enhanced", "llm-powered", "generative ai"]),
+    "Travel domain expertise":  ("domain", ["travel knowledge", "travel domain", "travel industry", "travel tech", "travel platform", "flight distribution", "gds", "global distribution system", "online travel agency", "ota "]),
     # Practices
     "A/B testing":              ("practice", ["a/b test", "ab test", "split test"]),
     "Experimentation":          ("practice", ["experiment"]),
@@ -71,7 +74,7 @@ _VOCABULARY: dict[str, tuple[str, list[str]]] = {
     "UX design":                ("practice", ["ux", "user experience design"]),
     "Prototyping":              ("practice", ["prototype", "wireframe", "mockup"]),
     "Growth hacking":           ("practice", ["growth loop", "growth hack", "growth experiment"]),
-    "Workflow automation":      ("practice", ["automate workflow", "workflow automation", "process automation", "automation workflow"]),
+    "Workflow automation":      ("practice", ["workflow automation", "automate workflow", "process automation", "automation workflow", "automated workflow"]),
     # Tools
     "Jira":                     ("tool", ["jira"]),
     "Confluence":               ("tool", ["confluence"]),
@@ -98,8 +101,8 @@ _VOCABULARY: dict[str, tuple[str, list[str]]] = {
     "Enterprise software":      ("domain", ["enterprise software", "enterprise product"]),
     "Marketplace":              ("domain", ["marketplace"]),
     "Mobile":                   ("domain", ["mobile app", "ios", "android"]),
-    "AI/ML products":           ("domain", ["ai product", "ml product", "machine learning product", "llm", "ai-native", "ai-driven", "artificial intelligence"]),
-    "Travel":                   ("domain", ["travel industry", "travel domain", "online travel", "travel tech", "flight distribution", "gds", "global distribution system"]),
+    "AI/ML products":           ("domain", ["ai product", "ml product", "machine learning product", "llm", "ai-native", "artificial intelligence"]),
+    "Travel":                   ("domain", ["online travel", "travel tech"]),
     "Booking platforms":        ("domain", ["booking platform", "booking system", "reservation system", "inventory management"]),
     "Payments":                 ("domain", ["payment", "transaction", "checkout"]),
     "E-commerce":               ("domain", ["e-commerce", "ecommerce"]),
@@ -161,6 +164,41 @@ def match_keywords_from_jd(jd_text: str) -> list[dict]:
         if any(pat in jd_lower for pat in patterns):
             found.append({"keyword": canonical, "category": category})
     return found
+
+
+# ── Post-generation keyword enforcement ──────────────────────────────────────
+
+def check_missing_jd_keywords(cv_sections: dict, jd_matched: list[dict]) -> list[dict]:
+    """Return JD-matched keywords absent from all text in cv_sections.
+
+    Presence is checked via vocabulary patterns (not just the canonical name)
+    so a bullet containing "third-party integration" satisfies the
+    "API & system integrations" keyword, etc.
+    """
+    texts: list[str] = []
+    for job in cv_sections.get("work_experience", []):
+        texts.extend(job.get("bullets", []))
+    for proj in cv_sections.get("projects", []):
+        texts.extend(proj.get("bullets", []))
+    skills = cv_sections.get("skills", {})
+    if isinstance(skills, dict):
+        texts.append(skills.get("proficiency", "") or "")
+        texts.append(skills.get("tools", "") or "")
+    elif isinstance(skills, list):
+        texts.extend(str(s) for s in skills)
+    combined = " ".join(texts).lower()
+
+    missing = []
+    for entry in jd_matched:
+        canonical = entry.get("keyword", "")
+        category = entry.get("category", "skill")
+        vocab = _VOCABULARY.get(canonical)
+        patterns = vocab[1] if vocab else []
+        # Keyword is present if any pattern matches OR the canonical name itself appears
+        present = any(pat in combined for pat in patterns) or canonical.lower() in combined
+        if not present:
+            missing.append({"keyword": canonical, "category": category})
+    return missing
 
 
 # ── LLM extraction (used only to discover new keywords not in vocabulary) ────

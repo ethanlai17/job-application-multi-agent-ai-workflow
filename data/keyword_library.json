@@ -1,7 +1,7 @@
 {
   "metadata": {
     "last_updated": "2026-04-30",
-    "total_jds_processed": 23,
+    "total_jds_processed": 29,
     "popularity_threshold": 2
   },
   "keywords": {
@@ -11,19 +11,19 @@
     },
     "Roadmapping": {
       "category": "skill",
-      "count": 19
+      "count": 25
     },
     "Prioritisation": {
       "category": "skill",
-      "count": 16
+      "count": 22
     },
     "Cross-functional collaboration": {
       "category": "skill",
-      "count": 12
+      "count": 18
     },
     "Metrics & success criteria": {
       "category": "skill",
-      "count": 8
+      "count": 14
     },
     "Problem definition": {
       "category": "skill",
@@ -51,7 +51,7 @@
     },
     "Stakeholder management": {
       "category": "skill",
-      "count": 13
+      "count": 19
     },
     "User research": {
       "category": "skill",
@@ -59,7 +59,7 @@
     },
     "Requirements definition": {
       "category": "skill",
-      "count": 10
+      "count": 16
     },
     "Experimentation": {
       "category": "practice",
@@ -67,7 +67,7 @@
     },
     "Data-driven decision-making": {
       "category": "practice",
-      "count": 4
+      "count": 10
     },
     "UX design": {
       "category": "practice",
@@ -79,7 +79,7 @@
     },
     "AI/ML products": {
       "category": "domain",
-      "count": 6
+      "count": 10
     },
     "Go-to-market": {
       "category": "skill",
@@ -87,7 +87,7 @@
     },
     "Fintech": {
       "category": "domain",
-      "count": 3
+      "count": 9
     },
     "Payments": {
       "category": "domain",
@@ -139,7 +139,7 @@
     },
     "E-commerce": {
       "category": "domain",
-      "count": 3
+      "count": 9
     },
     "Product discovery": {
       "category": "skill",
@@ -147,7 +147,7 @@
     },
     "Mobile": {
       "category": "domain",
-      "count": 4
+      "count": 10
     },
     "Design Thinking": {
       "category": "methodology",
@@ -167,7 +167,35 @@
     },
     "Marketplace": {
       "category": "domain",
-      "count": 1
+      "count": 7
+    },
+    "Backend systems": {
+      "category": "skill",
+      "count": 4
+    },
+    "API & system integrations": {
+      "category": "skill",
+      "count": 4
+    },
+    "Travel": {
+      "category": "domain",
+      "count": 4
+    },
+    "Booking platforms": {
+      "category": "domain",
+      "count": 4
+    },
+    "Machine learning": {
+      "category": "skill",
+      "count": 2
+    },
+    "AI-driven products": {
+      "category": "skill",
+      "count": 2
+    },
+    "Travel domain expertise": {
+      "category": "domain",
+      "count": 2
     }
   }
 }

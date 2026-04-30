@@ -11,7 +11,12 @@ from tools.document_tools import (
     render_cover_letter_pdf,
     render_cv_pdf,
 )
-from tools.keyword_tools import match_keywords_from_jd, get_popular_keywords_flat, update_library_from_jd
+from tools.keyword_tools import (
+    check_missing_jd_keywords,
+    get_popular_keywords_flat,
+    match_keywords_from_jd,
+    update_library_from_jd,
+)
 
 
 def _safe(text: str) -> str:
@@ -44,8 +49,9 @@ class DocumentAgent:
         # JD-matched = every vocabulary keyword explicitly present in this JD's requirements.
         # Union of both is passed to the LLM so no required skill from the JD is ever omitted.
         popular_keywords = get_popular_keywords_flat()
-        jd_matched = [m["keyword"] for m in match_keywords_from_jd(job.job_description)]
-        all_approved_keywords = list(dict.fromkeys(popular_keywords + jd_matched))
+        jd_matched_entries = match_keywords_from_jd(job.job_description)
+        jd_matched_names = [m["keyword"] for m in jd_matched_entries]
+        all_approved_keywords = list(dict.fromkeys(popular_keywords + jd_matched_names))
 
         # CV — LLM returns JSON with tailored sections
         cv_sections = generate_tailored_cv(
@@ -57,6 +63,20 @@ class DocumentAgent:
             model=self.config.model,
             popular_keywords=all_approved_keywords,
         )
+
+        # Enforce: every JD-matched keyword must appear somewhere in the CV.
+        # Any that the LLM silently dropped are injected into the skills section.
+        missing = check_missing_jd_keywords(cv_sections, jd_matched_entries)
+        if missing:
+            skills = cv_sections.setdefault("skills", {})
+            if not isinstance(skills, dict):
+                skills = {}
+                cv_sections["skills"] = skills
+            for kw in missing:
+                field = "tools" if kw["category"] == "tool" else "proficiency"
+                existing = skills.get(field, "") or ""
+                skills[field] = (existing + ", " + kw["keyword"]).lstrip(", ")
+
         cv_path = render_cv_pdf(cv_sections, str(cv_file))
 
         # Cover letter — LLM returns plain body text

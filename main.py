@@ -86,6 +86,24 @@ def process():
 
 
 @cli.command()
+@click.option("--company", required=True, help="Company name to match in the sheet (case-insensitive substring)")
+@click.option("--title", default=None, help="Optional job title substring to disambiguate when multiple rows match")
+def regenerate(company, title):
+    """Re-scrape and regenerate CV + cover letter for a job already in the sheet.
+
+    Looks up the job by company (and optionally title) in Google Sheets,
+    re-scrapes the LinkedIn URL stored there, and overwrites the existing PDFs.
+    """
+    try:
+        config = Config.load()
+        orchestrator = Orchestrator(config)
+        orchestrator.run_regenerate(company=company, title_filter=title)
+    except Exception as e:
+        console.print(f"[bold red]Error:[/bold red] {e}")
+        raise SystemExit(1)
+
+
+@cli.command()
 def keywords():
     """Show the PM keyword library — popular vs. niche keywords across all tracked JDs."""
     console.print(get_library_summary())
