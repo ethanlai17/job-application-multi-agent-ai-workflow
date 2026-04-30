@@ -9,6 +9,29 @@ from tools.playwright_tools import JobUnavailableError, RecruiterJobError
 from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TaskProgressColumn
 
 
+_PM_TITLE_PATTERNS = [
+    "product manager",
+    "product mgr",
+    "head of product",
+    "vp of product",
+    "vp, product",
+    "vp product",
+    "director of product",
+    "chief product officer",
+    " cpo",
+    "group product manager",
+    "principal product manager",
+    "lead product manager",
+    "staff product manager",
+]
+
+
+def _is_pm_role(title: str) -> bool:
+    """Return True only if the job title is genuinely a Product Manager role."""
+    t = title.lower()
+    return any(pattern in t for pattern in _PM_TITLE_PATTERNS)
+
+
 class JobSearchAgent:
     """Pure-Python job search — no LLM orchestration needed.
 
@@ -103,6 +126,11 @@ class JobSearchAgent:
                     # Prefer title/company from the detail page (more reliable than card)
                     title_final = details.get("title_from_detail") or card.get("title", "")
                     company_final = details.get("company_from_detail") or card.get("company", "")
+
+                    if not _is_pm_role(title_final):
+                        progress.console.print(f"    [dim]✗ Skipped (not a PM role): {title_final}[/dim]")
+                        progress.advance(task)
+                        continue
 
                     jobs.append(JobListing(
                         title=title_final,
