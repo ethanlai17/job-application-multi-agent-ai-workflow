@@ -60,7 +60,7 @@ class DocumentAgent:
             job_title=job.title,
             company=job.company,
             client=self.client,
-            model=self.config.model,
+            model=self.config.document_model,
             popular_keywords=all_approved_keywords,
         )
 
@@ -86,7 +86,7 @@ class DocumentAgent:
             job_title=job.title,
             company=job.company,
             client=self.client,
-            model=self.config.model,
+            model=self.config.document_model,
         )
         letter_path = render_cover_letter_pdf(letter_body, str(letter_file))
 

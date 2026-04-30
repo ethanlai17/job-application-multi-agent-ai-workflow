@@ -31,6 +31,7 @@ class Config:
     request_delay_min: float
     request_delay_max: float
     model: str
+    document_model: str
 
     @classmethod
     def load(cls) -> "Config":
@@ -53,6 +54,7 @@ class Config:
             request_delay_min=float(os.getenv("REQUEST_DELAY_MIN", "2.0")),
             request_delay_max=float(os.getenv("REQUEST_DELAY_MAX", "5.0")),
             model=os.getenv("DEEPSEEK_MODEL", "deepseek-v4-flash"),
+            document_model=os.getenv("DEEPSEEK_DOCUMENT_MODEL", "deepseek-v4"),
         )
 
     def override(self, **kwargs) -> "Config":
