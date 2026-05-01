@@ -176,7 +176,7 @@ RULES:
      are all too short). Fix by moving the short phrase earlier in the sentence:
        BAD:  "…rolling out a booking amendment feature across 5 microservices in 2 mos."
        GOOD: "…rolling out a booking amendment feature in 2 mos. across 5 microservices"
-     Or trim the bullet so it fits cleanly on one line.
+     Do NOT shorten or remove content — always preserve the full detail and metric.
    - ALWAYS preserve the original metric/outcome (€ amount, %, hours saved, etc.) — never strip numbers.
    - Keep the original sentence structure; you may:
        • swap a word for a JD keyword (e.g. "iterative" → "test-learn-iterate", "data" → "data-driven")
@@ -206,6 +206,8 @@ RULES:
        write "Jobs to Be Done (JTBD)" not just "JTBD"
    - NEVER abbreviate skill names — write them in full:
        write "Stakeholder management" not "Stakeholder mgnt" or "Stakeholder mgmt"
+   - Copy skill names EXACTLY as they appear in the APPROVED KEYWORD LIST — do not paraphrase or substitute words:
+       write "Cross-functional collaboration" not "Cross-functional leadership" or "Cross-functional alignment"
    - Avoid vague language: never write "various", "several", "multiple", or "etc."
      Replace with specific counts or named examples from the original CV.
 {_popular_keywords_rule(popular_keywords)}
@@ -309,7 +311,7 @@ def generate_cover_letter(
             {"role": "system", "content": system_instruction},
             {"role": "user", "content": prompt},
         ],
-        max_tokens=800,
+        max_tokens=4000,
     )
     return (response.choices[0].message.content or "").strip()
 
