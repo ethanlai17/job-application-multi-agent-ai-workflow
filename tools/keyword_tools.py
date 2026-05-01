@@ -59,7 +59,8 @@ _VOCABULARY: dict[str, tuple[str, list[str]]] = {
     "Product analytics":        ("skill", ["product analytics", "product metrics"]),
     "Competitive analysis":     ("skill", ["competitive analysis", "competitive research", "market research"]),
     "Cross-functional collaboration": ("skill", ["cross-functional", "cross functional"]),
-    "Metrics & success criteria": ("skill", ["success metrics", "north star", "metric", "metrics tracking", "metric tracking"]),
+    "Metrics & success criteria": ("skill", ["success metrics", "north star", "metric", "metrics tracking", "metric tracking", "indicator", "define success"]),
+    "Dependencies management":  ("skill", ["dependenc", "dependency management", "cross-team dependency", "manage dependencies"]),
     "Problem definition":       ("skill", ["problem definition", "problem statement"]),
     "Hypothesis validation":    ("skill", ["hypothesis", "validate assumption"]),
     "Backend systems":          ("skill", ["backend system", "back-end system", "server-side system", "backend architecture", "backend engineer", "backend service", "backend platform"]),
@@ -218,7 +219,7 @@ def _is_503_error(e: Exception) -> bool:
 def discover_new_keywords(jd_text: str, client: OpenAI, model: str) -> list[dict]:
     """
     Ask the LLM for keywords that might not be in the vocabulary yet.
-    Call sparingly — consumes Groq tokens.
+    Call sparingly — consumes LLM tokens.
     """
     known = set(_VOCABULARY.keys())
     prompt = f"""Extract PM skills/methodologies/tools NOT in this known list.

@@ -48,13 +48,13 @@ class Config:
             search_location=os.getenv("SEARCH_LOCATION", "London, United Kingdom"),
             search_work_type=os.getenv("SEARCH_WORK_TYPE", "hybrid"),
             search_salary_min=int(os.getenv("SEARCH_SALARY_MIN", "70000")),
-            max_jobs_per_run=int(os.getenv("MAX_JOBS_PER_RUN", "20")),
+            max_jobs_per_run=int(os.getenv("MAX_JOBS_PER_RUN", "10")),
             cv_path=os.getenv("CV_PATH", "my_cv.pdf"),
             headless_browser=os.getenv("HEADLESS_BROWSER", "false").lower() == "true",
             request_delay_min=float(os.getenv("REQUEST_DELAY_MIN", "2.0")),
             request_delay_max=float(os.getenv("REQUEST_DELAY_MAX", "5.0")),
             model=os.getenv("DEEPSEEK_MODEL", "deepseek-v4-flash"),
-            document_model=os.getenv("DEEPSEEK_DOCUMENT_MODEL", "deepseek-v4"),
+            document_model=os.getenv("DEEPSEEK_DOCUMENT_MODEL", "deepseek-v4-pro"),
         )
 
     def override(self, **kwargs) -> "Config":

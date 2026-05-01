@@ -1,4 +1,5 @@
 import asyncio
+import re as _re
 from datetime import date
 
 from browser.session import BrowserSession
@@ -12,6 +13,7 @@ from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TaskPr
 _PM_TITLE_PATTERNS = [
     "product manager",
     "product mgr",
+    "product transformation",
     "head of product",
     "vp of product",
     "vp, product",
@@ -30,6 +32,21 @@ def _is_pm_role(title: str) -> bool:
     """Return True only if the job title is genuinely a Product Manager role."""
     t = title.lower()
     return any(pattern in t for pattern in _PM_TITLE_PATTERNS)
+
+
+def _parse_salary_min(salary_str: str) -> int | None:
+    """Return the lower bound of a salary string (annual GBP), or None if unparseable."""
+    if not salary_str:
+        return None
+    nums = _re.findall(r"[\d,]+\s*[Kk]?", salary_str)
+    values = []
+    for n in nums:
+        n = n.strip()
+        multiplier = 1000 if n.lower().endswith("k") else 1
+        val = int(n.lower().rstrip("k").replace(",", "")) * multiplier
+        if val > 1000:
+            values.append(val)
+    return min(values) if values else None
 
 
 class JobSearchAgent:
@@ -132,12 +149,20 @@ class JobSearchAgent:
                         progress.advance(task)
                         continue
 
+                    salary_str = details.get("salary") or card.get("salary", "")
+                    if salary_min and salary_str:
+                        salary_min_val = _parse_salary_min(salary_str)
+                        if salary_min_val and salary_min_val < salary_min:
+                            progress.console.print(f"    [dim]✗ Skipped (salary {salary_str} below minimum £{salary_min:,}): {title_final}[/dim]")
+                            progress.advance(task)
+                            continue
+
                     jobs.append(JobListing(
                         title=title_final,
                         company=company_final,
                         url=card["url"],
                         location=card.get("location", ""),
-                        salary=details.get("salary") or card.get("salary", ""),
+                        salary=salary_str,
                         date_found=date.today(),
                         job_description=details["job_description"],
                         linkedin_job_id=job_id,

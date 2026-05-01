@@ -2,6 +2,7 @@
 .env
 credentials/*.json
 browser/linkedin_state.json
+config/cv_data.py
 
 # Python
 .venv/

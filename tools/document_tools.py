@@ -6,103 +6,80 @@ from openai import OpenAI
 from tenacity import retry, retry_if_exception, stop_after_attempt, wait_fixed
 from rich import print as rprint
 
+try:
+    from config.cv_data import (
+        APPLICANT_NAME, APPLICANT_TITLE, CONTACT, EDUCATION,
+        PROJECTS, WORK_EXPERIENCE_FIXED, EXTRA_BULLETS,
+    )
+except ImportError:
+    from config.cv_data_example import (
+        APPLICANT_NAME, APPLICANT_TITLE, CONTACT, EDUCATION,
+        PROJECTS, WORK_EXPERIENCE_FIXED, EXTRA_BULLETS,
+    )
+
 
 def _clean_bullet(text: str) -> str:
     """Collapse irregular whitespace in bullet text to single spaces."""
     return re.sub(r"[ \t]+", " ", text).strip()
 
-# ── Fixed CV content (never modified by LLM) ─────────────────────────────────
-
-_CONTACT = (
-    "(+44)7466675957 | ethanlaipm@gmail.com | "
-    "linkedin.com/in/ethan-lai17 | github.com/ethanlai17 | London, UK"
-)
-
-_EDUCATION = [
-    {
-        "title": "MSc. Information Systems (IS) - The University of Sheffield",
-        "detail": (
-            "Postgraduate merit scholarship. "
-            "Coursework: User-centred design, database design, IS modelling, Python"
-        ),
-    },
-    {
-        "title": "Erasmus+ exchange scholarship - University of Tampere, Finland",
-        "detail": (
-            "Coursework: Project management, Leadership, "
-            "Strategic management, Management of change"
-        ),
-    },
-    {
-        "title": "B.A Business Administration (Distinction) - University of Economics HCMC",
-        "detail": "",
-    },
-]
-
-_NEW_PROJECT = {
-    "name": "Job Application AI Multi-Agent Workflow",
-    "subtitle": "Vibe Coding",
-    "dates": "Apr 2026",
-    "bullets": [
-        (
-            "Built a multi-agent Python system orchestrating LinkedIn job search, "
-            "Google Sheets tracking, tailored CV/cover letter generation, and automated "
-            "form filling via Playwright and DeepSeek V4 LLM"
-        ),
-        (
-            "Designed a human-in-the-loop pipeline: agents search and generate documents, "
-            "user reviews and approves roles in Google Sheets, then agents auto-apply"
-        ),
-    ],
-}
-
-_LANGNOTE_PROJECT = {
-    "name": "LangNote",
-    "subtitle": "Product Manager",
-    "dates": "May - Dec 2021",
-    "bullets": [
-        "Shaped the product vision and conducted qualitative & quantitative market research to identify target audience",
-        "Developed a user pilot plan including A/B tests on hypotheses of nice-to-have features",
-    ],
-}
-
-# Fixed job title/company/dates — the LLM only controls bullet selection, never these fields.
-_WORK_EXPERIENCE_FIXED = [
-    {"title": "Senior Technical Product Manager", "company": "TUI UK",        "dates": "Oct 2022 – Present"},
-    {"title": "Technical Product Manager",        "company": "Inspectorio",   "dates": "Dec 2020 – Feb 2022"},
-    {"title": "Technical Business Analyst",       "company": "FPT Software",  "dates": "Jan – Dec 2020"},
-    {"title": "Account Manager",                  "company": "Carousell",     "dates": "Jul – Dec 2019"},
-]
-
-# Verified extra bullets — real experience not yet written into the original CV PDF.
-# The LLM may use these exactly as written when the JD matches the described skill.
-_EXTRA_BULLETS = [
-    {
-        "company": "TUI UK",
-        "text": (
-            "Defined conversion, bookability, and API latency as needle-moving KPIs at TUI UK, "
-            "applying a data-driven approach to product ownership to translate metric insights "
-            "into engineering priorities"
-        ),
-        "use_when": (
-            "JD explicitly mentions data-driven product ownership, defining or tracking metrics, "
-            "conversion/bookability/latency, or performance KPIs"
-        ),
-    },
-]
-
 
 def _extra_bullets_block() -> str:
-    if not _EXTRA_BULLETS:
+    if not EXTRA_BULLETS:
         return ""
     lines = [
         "\nADDITIONAL VERIFIED BULLETS (confirmed real experience — not yet in original CV PDF):",
         "Use these EXACTLY as written when the JD calls for the corresponding skill.",
     ]
-    for b in _EXTRA_BULLETS:
+    for b in EXTRA_BULLETS:
         lines.append(f'  {b["company"]}: "{b["text"]}"')
         lines.append(f'  [Include when: {b["use_when"]}]')
     return "\n".join(lines)
+
+
+def _work_experience_rules() -> str:
+    """Generate the work experience prompt rules from WORK_EXPERIENCE_FIXED."""
+    mandatory = WORK_EXPERIENCE_FIXED[:3]
+    optional = WORK_EXPERIENCE_FIXED[3] if len(WORK_EXPERIENCE_FIXED) > 3 else None
+    top_two_companies = " and ".join(j["company"] for j in mandatory[:2])
+
+    lines = [
+        f"1. work_experience — MUST include the first {len(mandatory)} jobs in this EXACT order "
+        f"with these EXACT titles:"
+    ]
+    for i, job in enumerate(mandatory, 1):
+        lines.append(f'   {i}. "{job["title"]}" at "{job["company"]}",  {job["dates"]}')
+
+    if optional:
+        lines.append(
+            f'   The {len(mandatory) + 1}th job "{optional["title"]}" at "{optional["company"]}"'
+            f' ({optional["dates"]}) is OPTIONAL:'
+        )
+        lines.append(
+            f"   include it ONLY if it adds clear value for this specific JD.\n"
+            f"   If {top_two_companies} bullets already cover the JD requirements comprehensively,\n"
+            f"   OMIT {optional['company']} and give {top_two_companies} 4–5 bullets each instead."
+        )
+
+    return "\n".join(lines)
+
+
+def _projects_prompt_rules() -> str:
+    """Generate the projects prompt section from PROJECTS."""
+    ordinals = ["First", "Second", "Third", "Fourth", "Fifth"]
+    lines = [
+        f"2. projects — include EXACTLY these {len(PROJECTS)} project(s) in this order (use verbatim):"
+    ]
+    for i, proj in enumerate(PROJECTS):
+        ord_str = ordinals[i] if i < len(ordinals) else f"{i + 1}th"
+        subtitle = proj.get("subtitle", "")
+        bullets_str = json.dumps(proj["bullets"], ensure_ascii=False)
+        lines.append(
+            f'   {ord_str}: {{"name": "{proj["name"]}", "subtitle": "{subtitle}", '
+            f'"dates": "{proj["dates"]}",\n'
+            f"     \"bullets\": {bullets_str}}}"
+        )
+    return "\n".join(lines)
+
 
 # ── CV reading ────────────────────────────────────────────────────────────────
 
@@ -138,13 +115,13 @@ def _popular_keywords_rule(popular_keywords: list[str] | None) -> str:
     """Build the skills-filter rule injected into the CV prompt."""
     if not popular_keywords:
         return (
-            "   - Include ALL relevant skills from the JD, even if not in Ethan's CV.\n"
+            "   - Include ALL relevant skills from the JD, even if not in the applicant's CV.\n"
         )
     kw_list = ", ".join(popular_keywords)
     return (
         f"   - APPROVED KEYWORD LIST (market-popular skills + every skill explicitly required in this JD):\n"
         f"     {kw_list}\n"
-        f"   - Only include skills/keywords from this approved list OR from Ethan's original CV or ADDITIONAL VERIFIED BULLETS.\n"
+        f"   - Only include skills/keywords from this approved list OR from {APPLICANT_NAME}'s original CV or ADDITIONAL VERIFIED BULLETS.\n"
         f"   - Do NOT add niche, company-specific jargon from this JD that is not on the approved list\n"
         f"     (e.g. one-off phrases like 'thinking in bets', 'thin/vertical slicing', 'test-learn-iterate'\n"
         f"     should only appear if they are already in the approved list above).\n"
@@ -172,7 +149,7 @@ def generate_tailored_cv(
     popular_keywords: list[str] | None = None,
 ) -> dict:
     """Ask the LLM for tailored CV sections. Returns a dict with work_experience, projects, skills."""
-    prompt = f"""You are an expert CV writer tailoring Ethan Lai's CV for a specific job.
+    prompt = f"""You are an expert CV writer tailoring {APPLICANT_NAME}'s CV for a specific job.
 
 Return ONLY a valid JSON object — no markdown fences, no explanation — matching this schema exactly:
 {{
@@ -191,18 +168,15 @@ Return ONLY a valid JSON object — no markdown fences, no explanation — match
 
 RULES:
 
-1. work_experience — MUST include the first 3 jobs in this EXACT order with these EXACT titles:
-   1. "Senior Technical Product Manager" at "TUI UK",  Oct 2022 – Present
-   2. "Technical Product Manager" at "Inspectorio",    Dec 2020 – Feb 2022
-   3. "Technical Business Analyst" at "FPT Software",  Jan – Dec 2020
-   The 4th job "Account Manager" at "Carousell" (Jul – Dec 2019) is OPTIONAL:
-   include it ONLY if it adds clear value for this specific JD.
-   If TUI UK and Inspectorio bullets already cover the JD requirements comprehensively,
-   OMIT Carousell and give TUI UK and Inspectorio 4–5 bullets each instead.
+{_work_experience_rules()}
    - Select 3–5 bullets per job that best match the JD.
-   - Keep each bullet to at most 2 lines. If a bullet wraps to a 2nd line, ensure the last line
-     has at least 5 words — never leave a single word or very short phrase alone on the last line.
-     Trim or rephrase the end of any bullet that would otherwise orphan a word.
+   - Keep each bullet to at most 2 lines. If a bullet wraps to a 2nd line, the last line MUST
+     contain at least 5 words. NEVER end a bullet with a short time span, number, or 1-2 word
+     phrase alone on the last line (e.g. "in 2 mos.", "in Q3", "across 3 teams", "via Agile"
+     are all too short). Fix by moving the short phrase earlier in the sentence:
+       BAD:  "…rolling out a booking amendment feature across 5 microservices in 2 mos."
+       GOOD: "…rolling out a booking amendment feature in 2 mos. across 5 microservices"
+     Or trim the bullet so it fits cleanly on one line.
    - ALWAYS preserve the original metric/outcome (€ amount, %, hours saved, etc.) — never strip numbers.
    - Keep the original sentence structure; you may:
        • swap a word for a JD keyword (e.g. "iterative" → "test-learn-iterate", "data" → "data-driven")
@@ -211,28 +185,18 @@ RULES:
    - Do NOT truncate bullets to just an action verb without context or metric.
    - Do NOT invent metrics, companies, or outcomes not in the original CV.
    - Do NOT fabricate bullets — only use or adapt bullets from the original CV or ADDITIONAL VERIFIED BULLETS below.
-     Carousell has EXACTLY 2 bullets in the original. Do not add a third.
    - Only weave in a JD keyword if it fits naturally. If it sounds forced, leave that bullet unchanged.
    - Target style: "Drove €1.6M revenue by launching global booking fee across 5 microservices via test-learn-iterate"
                    "Designed AI-powered personalisation engine via Continuous Discovery, boosting CTR 15% & conversion 3%"
 
-2. projects — include EXACTLY these 2 projects in this order (use verbatim):
-   First: {{"name": "Job Application AI Multi-Agent Workflow", "subtitle": "Vibe Coding", "dates": "Apr 2026",
-     "bullets": [
-       "Built a multi-agent Python system orchestrating LinkedIn job search, Google Sheets tracking, tailored CV/cover letter generation, and automated form filling via Playwright and Groq LLM",
-       "Designed a human-in-the-loop pipeline: agents search and generate documents, user reviews and approves roles in Google Sheets, then agents auto-apply"
-     ]}}
-   Second: {{"name": "LangNote", "subtitle": "Product Manager", "dates": "May - Dec 2021",
-     "bullets": [
-       "Shaped the product vision and conducted qualitative & quantitative market research to identify target audience",
-       "Developed a user pilot plan including A/B tests on hypotheses of nice-to-have features"
-     ]}}
+{_projects_prompt_rules()}
 
 3. skills — this is CRITICAL:
    - Read the FULL job description carefully and extract relevant skills, methodologies, frameworks, and tools.
-   - Merge with Ethan's existing skills, placing JD-matched skills first.
+   - Include ALL keywords from the APPROVED KEYWORD LIST below that are relevant to this JD — do not skip any approved keyword that appears in the JD.
+   - Merge with {APPLICANT_NAME}'s existing skills, placing JD-matched skills first.
    - "proficiency" = core competencies: methodologies, frameworks, soft skills, PM skills (rendered as "Core Competencies" on the CV — an ATS-standard label)
-   - "tools" = named software tools and platforms from both the JD and Ethan's original CV
+   - "tools" = named software tools and platforms from both the JD and {APPLICANT_NAME}'s original CV
    - Keep each value (proficiency / tools) to ONE compact comma-separated line — no repetition, no padding.
      Limit to 5–7 items each; stop adding items before the line would orphan a single word on the next line.
      Rule of thumb: proficiency ≤ 100 characters, tools ≤ 85 characters.
@@ -240,12 +204,14 @@ RULES:
        write "Objectives and Key Results (OKRs)" not just "OKRs"
        write "Key Performance Indicators (KPIs)" not just "KPIs"
        write "Jobs to Be Done (JTBD)" not just "JTBD"
+   - NEVER abbreviate skill names — write them in full:
+       write "Stakeholder management" not "Stakeholder mgnt" or "Stakeholder mgmt"
    - Avoid vague language: never write "various", "several", "multiple", or "etc."
      Replace with specific counts or named examples from the original CV.
 {_popular_keywords_rule(popular_keywords)}
 4. Return ONLY the JSON — nothing else.
 
-ETHAN'S ORIGINAL CV:
+{APPLICANT_NAME.upper()}'S ORIGINAL CV:
 {cv_text}
 {_extra_bullets_block()}
 
@@ -271,14 +237,15 @@ Full Job Description:
     result = json.loads(content)
 
     # Enforce fixed titles/companies/dates — LLM controls bullets only.
-    # First 3 jobs are mandatory; Carousell (4th) is optional — only added if LLM included it.
+    # First 3 jobs are mandatory; any beyond index 2 are optional — only added if LLM included them.
     jobs = result.get("work_experience", [])
-    for i, fixed in enumerate(_WORK_EXPERIENCE_FIXED):
+    mandatory_count = min(3, len(WORK_EXPERIENCE_FIXED))
+    for i, fixed in enumerate(WORK_EXPERIENCE_FIXED):
         if i < len(jobs):
             jobs[i]["title"] = fixed["title"]
             jobs[i]["company"] = fixed["company"]
             jobs[i]["dates"] = fixed["dates"]
-        elif i < 3:
+        elif i < mandatory_count:
             jobs.append({**fixed, "bullets": []})
     result["work_experience"] = jobs
 
@@ -315,18 +282,18 @@ def generate_cover_letter(
 ) -> str:
     """Ask the LLM for cover letter body paragraphs only (no salutation/sign-off)."""
     system_instruction = (
-        "You are writing a cover letter body for Ethan Lai, a Technical Product Manager. "
-        "Write exactly 3 paragraphs, total under 280 words, in a formal but human style. "
-        "Focus on specific measurable impacts from Ethan's experience and how they "
+        f"You are writing a cover letter body for {APPLICANT_NAME}, a {APPLICANT_TITLE}. "
+        f"Write exactly 3 paragraphs, total under 280 words, in a formal but human style. "
+        f"Focus on specific measurable impacts from {APPLICANT_NAME}'s experience and how they "
         "match what this company and role need. "
         "Do NOT include: a salutation (no 'Dear'), sign-off, subject line, or date — "
         "those are added separately. "
         "Do NOT use clichés like 'I am writing to express my interest' or "
         "'I am a passionate'. "
-        "Open with what specifically draws Ethan to this company and role. "
+        f"Open with what specifically draws {APPLICANT_NAME} to this company and role. "
         "Middle paragraph: 2-3 specific achievements with metrics that directly address the JD. "
         "Closing: concise statement of contribution and confidence.\n\n"
-        f"ETHAN'S CV:\n{cv_text}"
+        f"{APPLICANT_NAME.upper()}'S CV:\n{cv_text}"
     )
 
     prompt = (
@@ -414,8 +381,8 @@ def render_cv_pdf(sections: dict, output_path: str) -> str:
         story = []
 
         # ── Header ────────────────────────────────────────────────────────────
-        story.append(Paragraph("ETHAN LAI", name_s))
-        story.append(Paragraph(_CONTACT, contact_s))
+        story.append(Paragraph(APPLICANT_NAME.upper(), name_s))
+        story.append(Paragraph(CONTACT, contact_s))
         story.append(HRFlowable(width="100%", thickness=1, color=colors.black,
                                 spaceAfter=3 * scale))
 
@@ -446,7 +413,7 @@ def render_cv_pdf(sections: dict, output_path: str) -> str:
 
         # ── Projects ─────────────────────────────────────────────────────────
         section_header("PROJECTS")
-        for proj in sections.get("projects", [_NEW_PROJECT]):
+        for proj in sections.get("projects", PROJECTS[:1]):
             label = proj["name"]
             if proj.get("subtitle"):
                 label = f"{proj['subtitle']} - {proj['name']}"
@@ -456,7 +423,7 @@ def render_cv_pdf(sections: dict, output_path: str) -> str:
 
         # ── Education (fixed) ────────────────────────────────────────────────
         section_header("EDUCATION")
-        for edu in _EDUCATION:
+        for edu in EDUCATION:
             story.append(Paragraph(edu["title"], edu_s))
             if edu["detail"]:
                 story.append(Paragraph(f"•&#9;{edu['detail']}", edu_det_s))
@@ -541,7 +508,7 @@ def render_cover_letter_pdf(body_text: str, output_path: str) -> str:
         if para:
             story.append(Paragraph(para.replace("\n", " "), body_s))
 
-    story.append(Paragraph("Kind regards,<br/>Ethan Lai", sign_s))
+    story.append(Paragraph(f"Kind regards,<br/>{APPLICANT_NAME}", sign_s))
 
     doc.build(story)
     return output_path
