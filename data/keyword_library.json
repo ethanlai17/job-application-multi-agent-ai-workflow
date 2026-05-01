@@ -1,7 +1,7 @@
 {
   "metadata": {
     "last_updated": "2026-05-01",
-    "total_jds_processed": 62,
+    "total_jds_processed": 63,
     "popularity_threshold": 2
   },
   "keywords": {
@@ -11,19 +11,19 @@
     },
     "Roadmapping": {
       "category": "skill",
-      "count": 39
+      "count": 40
     },
     "Prioritisation": {
       "category": "skill",
-      "count": 54
+      "count": 55
     },
     "Cross-functional collaboration": {
       "category": "skill",
-      "count": 39
+      "count": 40
     },
     "Metrics & success criteria": {
       "category": "skill",
-      "count": 22
+      "count": 23
     },
     "Problem definition": {
       "category": "skill",
@@ -51,7 +51,7 @@
     },
     "Stakeholder management": {
       "category": "skill",
-      "count": 45
+      "count": 46
     },
     "User research": {
       "category": "skill",
@@ -83,11 +83,11 @@
     },
     "Go-to-market": {
       "category": "skill",
-      "count": 10
+      "count": 11
     },
     "Fintech": {
       "category": "domain",
-      "count": 15
+      "count": 16
     },
     "Payments": {
       "category": "domain",
@@ -95,7 +95,7 @@
     },
     "B2B SaaS": {
       "category": "domain",
-      "count": 9
+      "count": 10
     },
     "Scrum": {
       "category": "methodology",
@@ -107,7 +107,7 @@
     },
     "Product strategy": {
       "category": "skill",
-      "count": 23
+      "count": 24
     },
     "Prototyping": {
       "category": "practice",
@@ -115,7 +115,7 @@
     },
     "Backlog management": {
       "category": "skill",
-      "count": 21
+      "count": 22
     },
     "A/B testing": {
       "category": "practice",
@@ -215,7 +215,7 @@
     },
     "Dependencies management": {
       "category": "skill",
-      "count": 2
+      "count": 3
     }
   }
 }

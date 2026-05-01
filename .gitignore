@@ -3,6 +3,7 @@
 credentials/*.json
 browser/linkedin_state.json
 config/cv_data.py
+config/experience_library.py
 
 # Python
 .venv/

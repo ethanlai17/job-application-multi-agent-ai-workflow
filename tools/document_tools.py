@@ -17,10 +17,35 @@ except ImportError:
         PROJECTS, WORK_EXPERIENCE_FIXED, EXTRA_BULLETS,
     )
 
+try:
+    from config.experience_library import EXPERIENCE_LIBRARY
+except ImportError:
+    EXPERIENCE_LIBRARY = {}
+
 
 def _clean_bullet(text: str) -> str:
     """Collapse irregular whitespace in bullet text to single spaces."""
     return re.sub(r"[ \t]+", " ", text).strip()
+
+
+def _experience_library_block() -> str:
+    if not EXPERIENCE_LIBRARY:
+        return ""
+    lines = [
+        "EXPERIENCE LIBRARY — PRIMARY source for bullet selection.",
+        "Each section groups bullets by capability. Multiple framings of the same achievement",
+        "are provided (reframed + original). Always pick the version whose language most",
+        "closely mirrors the JD's exact wording, preserving all metrics.",
+    ]
+    for category, bullets in EXPERIENCE_LIBRARY.items():
+        lines.append(f"\n--- {category} ---")
+        current_company = None
+        for b in bullets:
+            if b["company"] != current_company:
+                current_company = b["company"]
+                lines.append(f'{current_company}:')
+            lines.append(f'  • {b["text"]}')
+    return "\n".join(lines)
 
 
 def _extra_bullets_block() -> str:
@@ -57,7 +82,7 @@ def _work_experience_rules() -> str:
         lines.append(
             f"   include it ONLY if it adds clear value for this specific JD.\n"
             f"   If {top_two_companies} bullets already cover the JD requirements comprehensively,\n"
-            f"   OMIT {optional['company']} and give {top_two_companies} 4–5 bullets each instead."
+            f"   OMIT {optional['company']} and still use the standard bullet counts (TUI UK: 5, Inspectorio: 4, FPT Software: 2)."
         )
 
     return "\n".join(lines)
@@ -169,7 +194,25 @@ Return ONLY a valid JSON object — no markdown fences, no explanation — match
 RULES:
 
 {_work_experience_rules()}
-   - Select 3–5 bullets per job that best match the JD.
+   - Generate bullet CANDIDATES per job, ranked most-to-least relevant to this JD:
+       TUI UK:       5–8 bullets  (minimum 5, maximum 8)
+       Inspectorio:  4–7 bullets  (minimum 4, maximum 7)
+       FPT Software: 2–5 bullets  (minimum 2, maximum 5)
+     Put the most JD-relevant bullets first — the renderer will automatically select the
+     optimal count to fill one A4 page, always keeping TUI > Inspectorio > FPT.
+   - BULLET SELECTION PROCESS — follow these steps in order:
+       Step 1: Extract every responsibility and required qualification from the JD.
+       Step 2: For each extracted requirement, identify the matching capability category in the EXPERIENCE LIBRARY,
+               then scan all bullets in that category for direct or adjacent matches.
+               "Adjacent" means the underlying skill/activity is the same even if the wording differs.
+               EXAMPLE — JD says "Track adoption, usage, behaviour change and feedback; define leading indicators."
+                         Match category: "Root Cause Analysis & Evidence Synthesis"
+                         Adjacent bullet: "Developed real-time logging & dashboards for search microservices,
+                         reducing incident resolution time by 30%" → INCLUDE IT (it is about tracking and measurement).
+       Step 3: ALWAYS include an adjacent bullet when found. Pick the framing (reframed or original) whose language
+               most closely mirrors the JD's wording, while preserving the original metric.
+               If neither framing fits naturally, adapt the closest one — never invent a new bullet.
+       Step 4: Fill the remaining bullet slots with the next-best matching bullets.
    - Keep each bullet to at most 2 lines. If a bullet wraps to a 2nd line, the last line MUST
      contain at least 5 words. NEVER end a bullet with a short time span, number, or 1-2 word
      phrase alone on the last line (e.g. "in 2 mos.", "in Q3", "across 3 teams", "via Agile"
@@ -184,7 +227,7 @@ RULES:
    - NEVER append "…demonstrating/reflecting/showcasing/highlighting X" at the end — forbidden.
    - Do NOT truncate bullets to just an action verb without context or metric.
    - Do NOT invent metrics, companies, or outcomes not in the original CV.
-   - Do NOT fabricate bullets — only use or adapt bullets from the original CV or ADDITIONAL VERIFIED BULLETS below.
+   - Do NOT fabricate bullets — only use or adapt bullets from the EXPERIENCE LIBRARY or ADDITIONAL VERIFIED BULLETS below.
    - Only weave in a JD keyword if it fits naturally. If it sounds forced, leave that bullet unchanged.
    - Target style: "Drove €1.6M revenue by launching global booking fee across 5 microservices via test-learn-iterate"
                    "Designed AI-powered personalisation engine via Continuous Discovery, boosting CTR 15% & conversion 3%"
@@ -196,10 +239,17 @@ RULES:
    - Include ALL keywords from the APPROVED KEYWORD LIST below that are relevant to this JD — do not skip any approved keyword that appears in the JD.
    - Merge with {APPLICANT_NAME}'s existing skills, placing JD-matched skills first.
    - "proficiency" = core competencies: methodologies, frameworks, soft skills, PM skills (rendered as "Core Competencies" on the CV — an ATS-standard label)
-   - "tools" = named software tools and platforms from both the JD and {APPLICANT_NAME}'s original CV
+   - "tools" = named software tools and platforms. Selection process:
+       Step 1: For every responsibility and qualification in the JD, ask which tool from {APPLICANT_NAME}'s
+               toolkit would be used to perform that task — add it.
+       Step 2: Always prefer tools from this PRIORITY LIST (in order) before adding anything else:
+               Python, SQL, Excel, Tableau, Power BI, Datadog, Grafana, AWS services, Google Analytics,
+               Postman, Swagger, Bruno
+       Step 3: Fill the tools line to its character limit — keep adding lower-priority tools from the
+               original CV until you reach the limit. Never leave the tools line half-empty.
    - Keep each value (proficiency / tools) to ONE compact comma-separated line — no repetition, no padding.
-     Limit to 5–7 items each; stop adding items before the line would orphan a single word on the next line.
-     Rule of thumb: proficiency ≤ 100 characters, tools ≤ 85 characters.
+     Fill to the character limit: proficiency target 90–110 characters, tools target 80–100 characters.
+     Stop only when the next item would push the line over the limit or orphan a single word.
    - Spell out abbreviations on first use:
        write "Objectives and Key Results (OKRs)" not just "OKRs"
        write "Key Performance Indicators (KPIs)" not just "KPIs"
@@ -213,9 +263,11 @@ RULES:
 {_popular_keywords_rule(popular_keywords)}
 4. Return ONLY the JSON — nothing else.
 
-{APPLICANT_NAME.upper()}'S ORIGINAL CV:
-{cv_text}
+{_experience_library_block()}
 {_extra_bullets_block()}
+
+{APPLICANT_NAME.upper()}'S ORIGINAL CV (use for skills context; bullets above take precedence):
+{cv_text}
 
 TARGET ROLE:
 Title: {job_title}
@@ -292,8 +344,11 @@ def generate_cover_letter(
         "those are added separately. "
         "Do NOT use clichés like 'I am writing to express my interest' or "
         "'I am a passionate'. "
+        "Do NOT use '--' (double hyphen) anywhere — use a comma, semicolon, or rewrite the sentence instead. "
         f"Open with what specifically draws {APPLICANT_NAME} to this company and role. "
         "Middle paragraph: 2-3 specific achievements with metrics that directly address the JD. "
+        "Prioritise examples from TUI UK (most recent, UK-based) first; "
+        "use Inspectorio only as a secondary source when it adds relevant evidence not covered by TUI. "
         "Closing: concise statement of contribution and confidence.\n\n"
         f"{APPLICANT_NAME.upper()}'S CV:\n{cv_text}"
     )
@@ -337,8 +392,10 @@ def render_cv_pdf(sections: dict, output_path: str) -> str:
         pagesize=A4, leftMargin=38, rightMargin=38, topMargin=28, bottomMargin=24,
     )
 
-    def _build_story(scale: float) -> list:
+    def _build_story(scale: float, we_override=None) -> list:
         """Build the platypus story with vertical spacing multiplied by scale.
+
+        we_override: if provided, replaces sections["work_experience"] (used by greedy optimizer).
 
         ATS compliance:
         - All body text >= 10pt (ATS minimum)
@@ -347,10 +404,11 @@ def render_cv_pdf(sections: dict, output_path: str) -> str:
         - Helvetica font (ATS-approved)
         - Justified bullets for clean text extraction
         """
+        work_experience = we_override if we_override is not None else sections.get("work_experience", [])
 
         def s(name, **kw):
-            # Base defaults: 10pt body, 12pt leading (ATS minimum font size)
-            defaults = dict(fontName="Helvetica", fontSize=10, leading=12 * scale)
+            # Base defaults: 10pt body, 11pt leading (1.1× — ATS-safe; 1.0× is the floor)
+            defaults = dict(fontName="Helvetica", fontSize=10, leading=11 * scale)
             defaults.update(kw)
             return ParagraphStyle(name, **defaults)
 
@@ -364,20 +422,20 @@ def render_cv_pdf(sections: dict, output_path: str) -> str:
 
         # Scaled body styles — all >= 10pt per ATS guidelines
         section_s = s("Section", fontName="Helvetica-Bold", fontSize=11, leading=13,
-                      spaceBefore=5 * scale, spaceAfter=1 * scale)
+                      spaceBefore=3 * scale, spaceAfter=0.5 * scale)
         # Title row: bold title left, dates right — same line via tab stop (no Table needed)
         title_row_s = s("TitleRow", fontName="Helvetica-Bold", fontSize=10,
-                        leading=12 * scale, spaceAfter=1 * scale,
+                        leading=11 * scale, spaceAfter=0.5 * scale,
                         tabStops=[(content_w, TA_RIGHT)])
         # Hanging indent: • at the left margin, tab stop at 12pt snaps text to the continuation
         # column — so the first-line text start and all wrapped lines are at exactly the same x.
         # Tab (&#9;) is a fixed-width stop, so justification never stretches the gap after •.
-        bullet_s  = s("Bullet",  fontSize=10, leading=12 * scale, leftIndent=12,
-                      firstLineIndent=-12, spaceAfter=0.5 * scale, alignment=TA_LEFT,
+        bullet_s  = s("Bullet",  fontSize=10, leading=11 * scale, leftIndent=12,
+                      firstLineIndent=-12, spaceAfter=0.3 * scale, alignment=TA_LEFT,
                       tabStops=[(12, TA_LEFT)])
-        edu_s     = s("Edu",     fontName="Helvetica-Bold", fontSize=10, leading=12 * scale)
-        edu_det_s = s("EduDet",  fontSize=10, leading=12 * scale, leftIndent=12,
-                      firstLineIndent=-12, spaceAfter=2 * scale, alignment=TA_LEFT,
+        edu_s     = s("Edu",     fontName="Helvetica-Bold", fontSize=10, leading=11 * scale)
+        edu_det_s = s("EduDet",  fontSize=10, leading=11 * scale, leftIndent=12,
+                      firstLineIndent=-12, spaceAfter=1.5 * scale, alignment=TA_LEFT,
                       tabStops=[(12, TA_LEFT)])
 
         story = []
@@ -386,12 +444,12 @@ def render_cv_pdf(sections: dict, output_path: str) -> str:
         story.append(Paragraph(APPLICANT_NAME.upper(), name_s))
         story.append(Paragraph(CONTACT, contact_s))
         story.append(HRFlowable(width="100%", thickness=1, color=colors.black,
-                                spaceAfter=3 * scale))
+                                spaceAfter=2 * scale))
 
         def section_header(text):
             story.append(Paragraph(text, section_s))
             story.append(HRFlowable(width="100%", thickness=0.5, color=colors.black,
-                                    spaceAfter=2 * scale))
+                                    spaceAfter=1 * scale))
 
         def title_row(label, dates):
             # Single Paragraph with right-aligned tab stop — title left, dates right on the same line.
@@ -407,11 +465,11 @@ def render_cv_pdf(sections: dict, output_path: str) -> str:
 
         # ── Work Experience ───────────────────────────────────────────────────
         section_header("WORK EXPERIENCE")
-        for job in sections.get("work_experience", []):
+        for job in work_experience:
             label = f"{job['title']} - {job['company']}"
             title_row(label, job.get("dates", ""))
             add_bullets(job.get("bullets", []))
-            story.append(Spacer(1, 3 * scale))
+            story.append(Spacer(1, 2 * scale))
 
         # ── Projects ─────────────────────────────────────────────────────────
         section_header("PROJECTS")
@@ -421,7 +479,7 @@ def render_cv_pdf(sections: dict, output_path: str) -> str:
                 label = f"{proj['subtitle']} - {proj['name']}"
             title_row(label, proj.get("dates", ""))
             add_bullets(proj.get("bullets", []))
-            story.append(Spacer(1, 3 * scale))
+            story.append(Spacer(1, 2 * scale))
 
         # ── Education (fixed) ────────────────────────────────────────────────
         section_header("EDUCATION")
@@ -430,7 +488,7 @@ def render_cv_pdf(sections: dict, output_path: str) -> str:
             if edu["detail"]:
                 story.append(Paragraph(f"•&#9;{edu['detail']}", edu_det_s))
             else:
-                story.append(Spacer(1, 4 * scale))
+                story.append(Spacer(1, 2 * scale))
 
         # ── Skills ───────────────────────────────────────────────────────────
         section_header("SKILLS")
@@ -447,17 +505,77 @@ def render_cv_pdf(sections: dict, output_path: str) -> str:
 
         return story
 
-    def _page_count(scale: float) -> int:
+    def _page_count(scale: float, we_override=None) -> int:
         buf = io.BytesIO()
         doc = SimpleDocTemplate(buf, **_DOC_KWARGS)
-        doc.build(_build_story(scale))
+        doc.build(_build_story(scale, we_override))
         buf.seek(0)
         pdf = fitz.open(stream=buf.read(), filetype="pdf")
         n = pdf.page_count
         pdf.close()
         return n
 
-    # Binary-search for the largest scale that still fits on one page.
+    def _greedy_trim_work_experience() -> list:
+        """Maximize bullet counts at scale=1.0 subject to TUI > Inspectorio > FPT and page fit.
+
+        Constraints:  TUI >= 5,  Inspectorio >= 4,  FPT >= 2
+                      TUI count > Inspectorio count > FPT count always
+        """
+        we = sections.get("work_experience", [])
+
+        def company_slot(marker):
+            for i, job in enumerate(we):
+                if marker in job.get("company", ""):
+                    return i, len(job["bullets"])
+            return None, 0
+
+        tui_i,  tui_max  = company_slot("TUI")
+        insp_i, insp_max = company_slot("Inspectorio")
+        fpt_i,  fpt_max  = company_slot("FPT")
+
+        counts = {}
+        if tui_i  is not None: counts[tui_i]  = min(5, tui_max)
+        if insp_i is not None: counts[insp_i] = min(4, insp_max)
+        if fpt_i  is not None: counts[fpt_i]  = min(2, fpt_max)
+
+        def make_we():
+            return [
+                {**job, "bullets": job["bullets"][:counts[i]]} if i in counts else job
+                for i, job in enumerate(we)
+            ]
+
+        # If minimums already overflow one page, return as-is and let binary search handle it.
+        if _page_count(1.0, make_we()) > 1:
+            return make_we()
+
+        # order: (index, upper_bound_index) — upper_bound_index must stay strictly greater
+        order = [
+            (tui_i,  None),
+            (insp_i, tui_i),
+            (fpt_i,  insp_i),
+        ]
+
+        while True:
+            progress = False
+            for idx, upper_idx in order:
+                if idx is None or counts.get(idx, 0) >= {tui_i: tui_max, insp_i: insp_max, fpt_i: fpt_max}.get(idx, 0):
+                    continue
+                if upper_idx is not None and counts.get(idx, 0) + 1 >= counts.get(upper_idx, 0):
+                    continue
+                counts[idx] += 1
+                if _page_count(1.0, make_we()) == 1:
+                    progress = True
+                else:
+                    counts[idx] -= 1
+            if not progress:
+                break
+
+        return make_we()
+
+    # Phase 1: greedily maximize bullet counts to fill the page at the tightest spacing.
+    sections["work_experience"] = _greedy_trim_work_experience()
+
+    # Phase 2: binary-search for the largest spacing scale that still fits on one page.
     # Range 1.0–2.0; 8 iterations → precision ~0.004, well below any visible threshold.
     bounds = [1.0, 2.0]
     best = 1.0
