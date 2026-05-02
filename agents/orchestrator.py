@@ -246,7 +246,7 @@ class Orchestrator:
         console.print("\n[italic]Waiting for you to review and approve jobs in Google Sheets...[/italic]")
         console.print("Run [bold cyan]python main.py apply[/bold cyan] when ready.")
 
-    def run_regenerate(self, company: str, title_filter: str | None = None):
+    def run_regenerate(self, company: str, title_filter: str | None = None, cv_only: bool = False):
         """Re-scrape and regenerate CV + cover letter for a job already tracked in the sheet."""
         console.print(f"[bold blue]Regenerating documents for:[/bold blue] {company}" +
                       (f" / {title_filter}" if title_filter else ""))
@@ -277,9 +277,9 @@ class Orchestrator:
             return
 
         cv_text = self._load_cv()
-        asyncio.run(self._regenerate_async(job, cv_text))
+        asyncio.run(self._regenerate_async(job, cv_text, cv_only=cv_only))
 
-    async def _regenerate_async(self, job: JobListing, cv_text: str):
+    async def _regenerate_async(self, job: JobListing, cv_text: str, cv_only: bool = False):
         async with BrowserSession(self.config) as session:
             logged_in = await playwright_tools.linkedin_login(
                 session, self.config.linkedin_email, self.config.linkedin_password
@@ -303,12 +303,13 @@ class Orchestrator:
         if not job.company:
             job.company = details.get("company_from_detail", job.company)
 
-        console.print("  Regenerating CV and cover letter…")
+        console.print("  Regenerating CV…" if cv_only else "  Regenerating CV and cover letter…")
         try:
-            cv_path, letter_path = self.document.generate(job, cv_text)
+            cv_path, letter_path = self.document.generate(job, cv_text, cv_only=cv_only)
             self.sheets.update_job_links(job, cv_path, letter_path)
             console.print(f"  [green]✓[/green] CV: {cv_path}")
-            console.print(f"  [green]✓[/green] Cover letter: {letter_path}")
+            if letter_path:
+                console.print(f"  [green]✓[/green] Cover letter: {letter_path}")
         except Exception as e:
             console.print(f"  [red]✗ Doc generation failed: {e}[/red]")
 

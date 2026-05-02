@@ -385,7 +385,7 @@ def render_cv_pdf(sections: dict, output_path: str) -> str:
     from reportlab.lib.pagesizes import A4
     from reportlab.lib.styles import ParagraphStyle
     from reportlab.lib import colors
-    from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
+    from reportlab.lib.enums import TA_CENTER, TA_JUSTIFY, TA_LEFT, TA_RIGHT
     from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, HRFlowable
 
     _DOC_KWARGS = dict(
@@ -407,8 +407,9 @@ def render_cv_pdf(sections: dict, output_path: str) -> str:
         work_experience = we_override if we_override is not None else sections.get("work_experience", [])
 
         def s(name, **kw):
-            # Base defaults: 10pt body, 11pt leading (1.1× — ATS-safe; 1.0× is the floor)
-            defaults = dict(fontName="Helvetica", fontSize=10, leading=11 * scale)
+            # Single base font (Helvetica) throughout — bold applied via <b> markup only.
+            # 11.5pt leading for 10pt text (1.15× — slightly looser than the ATS floor of 1.0×).
+            defaults = dict(fontName="Helvetica", fontSize=10, leading=11.5 * scale)
             defaults.update(kw)
             return ParagraphStyle(name, **defaults)
 
@@ -416,38 +417,37 @@ def render_cv_pdf(sections: dict, output_path: str) -> str:
         content_w = A4[0] - 38 - 38
 
         # Header — fixed, not scaled
-        name_s    = s("Name",    fontName="Helvetica-Bold", fontSize=16, leading=20,
+        name_s    = s("Name",    fontSize=16, leading=20,
                       alignment=TA_CENTER, spaceAfter=1)
-        contact_s = s("Contact", fontSize=9, leading=11, alignment=TA_CENTER, spaceAfter=3)
+        contact_s = s("Contact", fontSize=9,  leading=11, alignment=TA_CENTER, spaceAfter=3)
 
         # Scaled body styles — all >= 10pt per ATS guidelines
-        section_s = s("Section", fontName="Helvetica-Bold", fontSize=11, leading=13,
-                      spaceBefore=3 * scale, spaceAfter=0.5 * scale)
+        section_s   = s("Section",  fontSize=11, leading=13,
+                         spaceBefore=3 * scale, spaceAfter=0.5 * scale)
         # Title row: bold title left, dates right — same line via tab stop (no Table needed)
-        title_row_s = s("TitleRow", fontName="Helvetica-Bold", fontSize=10,
-                        leading=11 * scale, spaceAfter=0.5 * scale,
-                        tabStops=[(content_w, TA_RIGHT)])
+        title_row_s = s("TitleRow", fontSize=10, leading=11.5 * scale, spaceAfter=0.5 * scale,
+                         tabStops=[(content_w, TA_RIGHT)])
         # Hanging indent: • at the left margin, tab stop at 12pt snaps text to the continuation
         # column — so the first-line text start and all wrapped lines are at exactly the same x.
         # Tab (&#9;) is a fixed-width stop, so justification never stretches the gap after •.
-        bullet_s  = s("Bullet",  fontSize=10, leading=11 * scale, leftIndent=12,
-                      firstLineIndent=-12, spaceAfter=0.3 * scale, alignment=TA_LEFT,
-                      tabStops=[(12, TA_LEFT)])
-        edu_s     = s("Edu",     fontName="Helvetica-Bold", fontSize=10, leading=11 * scale)
-        edu_det_s = s("EduDet",  fontSize=10, leading=11 * scale, leftIndent=12,
-                      firstLineIndent=-12, spaceAfter=1.5 * scale, alignment=TA_LEFT,
-                      tabStops=[(12, TA_LEFT)])
+        bullet_s    = s("Bullet",   fontSize=10, leading=11.5 * scale, leftIndent=12,
+                         firstLineIndent=-12, spaceAfter=0.3 * scale, alignment=TA_JUSTIFY,
+                         tabStops=[(12, TA_LEFT)])
+        edu_s       = s("Edu",      fontSize=10, leading=11.5 * scale)
+        edu_det_s   = s("EduDet",   fontSize=10, leading=11.5 * scale, leftIndent=12,
+                         firstLineIndent=-12, spaceAfter=1.5 * scale, alignment=TA_JUSTIFY,
+                         tabStops=[(12, TA_LEFT)])
 
         story = []
 
         # ── Header ────────────────────────────────────────────────────────────
-        story.append(Paragraph(APPLICANT_NAME.upper(), name_s))
+        story.append(Paragraph(f"<b>{APPLICANT_NAME.upper()}</b>", name_s))
         story.append(Paragraph(CONTACT, contact_s))
         story.append(HRFlowable(width="100%", thickness=1, color=colors.black,
                                 spaceAfter=2 * scale))
 
         def section_header(text):
-            story.append(Paragraph(text, section_s))
+            story.append(Paragraph(f"<b>{text}</b>", section_s))
             story.append(HRFlowable(width="100%", thickness=0.5, color=colors.black,
                                     spaceAfter=1 * scale))
 
@@ -455,7 +455,7 @@ def render_cv_pdf(sections: dict, output_path: str) -> str:
             # Single Paragraph with right-aligned tab stop — title left, dates right on the same line.
             # ATS-friendly (no Table) and reads naturally in linear text extraction.
             story.append(Paragraph(
-                f'<b>{label}</b>&#9;<font name="Helvetica">{dates}</font>',
+                f'<b>{label}</b>&#9;{dates}',
                 title_row_s,
             ))
 
@@ -484,7 +484,7 @@ def render_cv_pdf(sections: dict, output_path: str) -> str:
         # ── Education (fixed) ────────────────────────────────────────────────
         section_header("EDUCATION")
         for edu in EDUCATION:
-            story.append(Paragraph(edu["title"], edu_s))
+            story.append(Paragraph(f"<b>{edu['title']}</b>", edu_s))
             if edu["detail"]:
                 story.append(Paragraph(f"•&#9;{edu['detail']}", edu_det_s))
             else:
@@ -571,6 +571,40 @@ def render_cv_pdf(sections: dict, output_path: str) -> str:
                 break
 
         return make_we()
+
+    def _trim_no_orphan(value: str, label: str, min_last_words: int = 4) -> str:
+        """Remove trailing comma-separated items until the last rendered line has >= min_last_words."""
+        from reportlab.pdfbase.pdfmetrics import stringWidth as sw
+        cw = A4[0] - 38 - 38 - 12  # content width minus bullet leftIndent
+        label_w = sw(label, "Helvetica-Bold", 10)
+        avail_first = cw - label_w
+        items = [x.strip() for x in value.split(",")]
+        for n in range(len(items), 0, -1):
+            candidate = ", ".join(items[:n])
+            if sw(candidate, "Helvetica", 10) <= avail_first:
+                return candidate  # fits on one line — no orphan possible
+            # Simulate word-wrap to find last line word count
+            words = candidate.split()
+            lines, cur, cur_w = [], [], avail_first
+            for word in words:
+                ww = sw(word + " ", "Helvetica", 10)
+                if cur_w - ww < 0 and cur:
+                    lines.append(cur); cur = [word]; cur_w = cw - ww
+                else:
+                    cur.append(word); cur_w -= ww
+            if cur:
+                lines.append(cur)
+            if not lines or len(lines[-1]) >= min_last_words:
+                return candidate
+        return items[0] if items else value
+
+    # Trim skill lines to prevent orphaned words before rendering.
+    skills = sections.get("skills", {})
+    if isinstance(skills, dict):
+        if skills.get("proficiency"):
+            skills["proficiency"] = _trim_no_orphan(skills["proficiency"], "Core Competencies: ")
+        if skills.get("tools"):
+            skills["tools"] = _trim_no_orphan(skills["tools"], "Tools: ")
 
     # Phase 1: greedily maximize bullet counts to fill the page at the tightest spacing.
     sections["work_experience"] = _greedy_trim_work_experience()

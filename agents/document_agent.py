@@ -29,7 +29,7 @@ class DocumentAgent:
         self.config = config
         self.client = client
 
-    def generate(self, job: JobListing, cv_text: str) -> tuple[str, str]:
+    def generate(self, job: JobListing, cv_text: str, cv_only: bool = False) -> tuple[str, str]:
         """Generate a tailored CV and cover letter as A4 PDFs.
 
         Returns (cv_path, cover_letter_path) as absolute file paths.
@@ -78,6 +78,9 @@ class DocumentAgent:
                 skills[field] = (existing + ", " + kw["keyword"]).lstrip(", ")
 
         cv_path = render_cv_pdf(cv_sections, str(cv_file))
+
+        if cv_only:
+            return cv_path, ""
 
         # Cover letter — LLM returns plain body text
         letter_body = generate_cover_letter(

@@ -88,7 +88,8 @@ def process():
 @cli.command()
 @click.option("--company", required=True, help="Company name to match in the sheet (case-insensitive substring)")
 @click.option("--title", default=None, help="Optional job title substring to disambiguate when multiple rows match")
-def regenerate(company, title):
+@click.option("--cv-only", is_flag=True, default=False, help="Regenerate CV only, skip cover letter")
+def regenerate(company, title, cv_only):
     """Re-scrape and regenerate CV + cover letter for a job already in the sheet.
 
     Looks up the job by company (and optionally title) in Google Sheets,
@@ -97,7 +98,7 @@ def regenerate(company, title):
     try:
         config = Config.load()
         orchestrator = Orchestrator(config)
-        orchestrator.run_regenerate(company=company, title_filter=title)
+        orchestrator.run_regenerate(company=company, title_filter=title, cv_only=cv_only)
     except Exception as e:
         console.print(f"[bold red]Error:[/bold red] {e}")
         raise SystemExit(1)
