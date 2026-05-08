@@ -1,7 +1,7 @@
 {
   "metadata": {
-    "last_updated": "2026-05-01",
-    "total_jds_processed": 63,
+    "last_updated": "2026-05-08",
+    "total_jds_processed": 68,
     "popularity_threshold": 2
   },
   "keywords": {
@@ -11,19 +11,19 @@
     },
     "Roadmapping": {
       "category": "skill",
-      "count": 40
+      "count": 45
     },
     "Prioritisation": {
       "category": "skill",
-      "count": 55
+      "count": 59
     },
     "Cross-functional collaboration": {
       "category": "skill",
-      "count": 40
+      "count": 44
     },
     "Metrics & success criteria": {
       "category": "skill",
-      "count": 23
+      "count": 26
     },
     "Problem definition": {
       "category": "skill",
@@ -51,7 +51,7 @@
     },
     "Stakeholder management": {
       "category": "skill",
-      "count": 46
+      "count": 50
     },
     "User research": {
       "category": "skill",
@@ -59,7 +59,7 @@
     },
     "Requirements definition": {
       "category": "skill",
-      "count": 28
+      "count": 29
     },
     "Experimentation": {
       "category": "practice",
@@ -67,7 +67,7 @@
     },
     "Data-driven decision-making": {
       "category": "practice",
-      "count": 19
+      "count": 20
     },
     "UX design": {
       "category": "practice",
@@ -83,11 +83,11 @@
     },
     "Go-to-market": {
       "category": "skill",
-      "count": 11
+      "count": 14
     },
     "Fintech": {
       "category": "domain",
-      "count": 16
+      "count": 19
     },
     "Payments": {
       "category": "domain",
@@ -95,7 +95,7 @@
     },
     "B2B SaaS": {
       "category": "domain",
-      "count": 10
+      "count": 13
     },
     "Scrum": {
       "category": "methodology",
@@ -107,7 +107,7 @@
     },
     "Product strategy": {
       "category": "skill",
-      "count": 24
+      "count": 28
     },
     "Prototyping": {
       "category": "practice",
@@ -115,7 +115,7 @@
     },
     "Backlog management": {
       "category": "skill",
-      "count": 22
+      "count": 26
     },
     "A/B testing": {
       "category": "practice",
@@ -127,7 +127,7 @@
     },
     "Jira": {
       "category": "tool",
-      "count": 5
+      "count": 6
     },
     "Figma": {
       "category": "tool",
@@ -191,7 +191,7 @@
     },
     "AI-driven products": {
       "category": "skill",
-      "count": 13
+      "count": 14
     },
     "Travel domain expertise": {
       "category": "domain",
@@ -203,7 +203,7 @@
     },
     "Competitive analysis": {
       "category": "skill",
-      "count": 4
+      "count": 5
     },
     "B2C": {
       "category": "domain",
@@ -215,7 +215,7 @@
     },
     "Dependencies management": {
       "category": "skill",
-      "count": 3
+      "count": 6
     }
   }
 }

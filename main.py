@@ -1,4 +1,5 @@
 import click
+from pathlib import Path
 from rich.console import Console
 
 from agents.orchestrator import Orchestrator
@@ -80,6 +81,31 @@ def process():
         config = Config.load()
         orchestrator = Orchestrator(config)
         orchestrator.run_process()
+    except Exception as e:
+        console.print(f"[bold red]Error:[/bold red] {e}")
+        raise SystemExit(1)
+
+
+@cli.command()
+@click.option("--company",  required=True, help="Company name")
+@click.option("--title",    required=True, help="Job title")
+@click.option("--jd",       default=None,  help="Job description as inline text")
+@click.option("--jd-file",  "jd_file", default=None, type=click.Path(exists=True),
+              help="Path to a .txt file containing the job description")
+@click.option("--cv-only",  is_flag=True, default=False, help="Generate CV only, skip cover letter")
+def generate(company, title, jd, jd_file, cv_only):
+    """Generate a tailored CV + cover letter from a raw job description.
+
+    Provide the JD via --jd-file (path to a .txt file) or --jd (inline text).
+    Logs the job to Google Sheets with Status = Pending Review.
+    """
+    if not jd and not jd_file:
+        raise click.UsageError("Provide --jd or --jd-file.")
+    jd_text = Path(jd_file).read_text(encoding="utf-8").strip() if jd_file else jd
+    try:
+        config = Config.load()
+        orchestrator = Orchestrator(config)
+        orchestrator.run_generate_from_jd(company, title, jd_text, cv_only=cv_only)
     except Exception as e:
         console.print(f"[bold red]Error:[/bold red] {e}")
         raise SystemExit(1)

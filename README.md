@@ -110,6 +110,29 @@ python scripts/populate_keyword_library.py
 
 ---
 
+### 9. Generate CV + cover letter from a raw job description
+Generate documents for a job you found outside LinkedIn — no URL or Sheets row needed.
+Pass the JD as a path to a `.txt` file or inline as a string. Logs the job to Google Sheets with Status = **Pending Review**.
+
+```bash
+# From a file
+python main.py generate \
+  --company "loveholidays" \
+  --title "Head of Product, Supply Platform" \
+  --jd-file /path/to/jd.txt
+
+# Inline text
+python main.py generate \
+  --company "loveholidays" \
+  --title "Head of Product, Supply Platform" \
+  --jd "We're looking for a leader who treats suppliers..."
+
+# CV only (skip cover letter)
+python main.py generate --company "X" --title "Y" --jd-file /path/to/jd.txt --cv-only
+```
+
+---
+
 ## Typical workflow
 
 ```bash

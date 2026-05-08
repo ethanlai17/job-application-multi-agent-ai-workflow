@@ -235,6 +235,32 @@ class Orchestrator:
             "[bold cyan]python main.py apply[/bold cyan]"
         )
 
+    def run_generate_from_jd(self, company: str, title: str, jd_text: str, cv_only: bool = False):
+        """Generate a tailored CV + cover letter from a raw job description."""
+        cv_text = self._load_cv()
+        job = JobListing(
+            title=title, company=company, url="", location="", salary="",
+            date_found=date.today(), job_description=jd_text,
+        )
+
+        appended = self.sheets.append_jobs([job])
+        if appended:
+            job = appended[0]
+
+        console.print(f"  [cyan]→[/cyan] {title} @ {company} — generating documents…")
+        try:
+            cv_path, letter_path = self.document.generate(job, cv_text, cv_only=cv_only)
+            if job.sheet_row:
+                self.sheets.update_job_links(job, cv_path, letter_path)
+                self.sheets.update_job_status(job, ApplicationStatus.PENDING_REVIEW)
+            console.print(f"    [green]✓[/green] CV: {cv_path}")
+            if not cv_only:
+                console.print(f"    [green]✓[/green] Cover letter: {letter_path}")
+        except Exception as e:
+            if job.sheet_row:
+                self.sheets.update_job_status(job, ApplicationStatus.ERROR, Notes=str(e))
+            console.print(f"    [red]✗ Doc generation failed: {e}[/red]")
+
     def run_full(
         self,
         title: str | None = None,
