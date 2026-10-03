@@ -25,6 +25,7 @@ class Config:
     search_location: str
     search_work_type: str
     search_salary_min: int
+    search_exclude_keywords: str
     max_jobs_per_run: int
     cv_path: str
     headless_browser: bool
@@ -32,6 +33,9 @@ class Config:
     request_delay_max: float
     model: str
     document_model: str
+    telegram_bot_token: str
+    telegram_chat_id: str
+    review_timeout_seconds: int
 
     @classmethod
     def load(cls) -> "Config":
@@ -48,6 +52,7 @@ class Config:
             search_location=os.getenv("SEARCH_LOCATION", "London, United Kingdom"),
             search_work_type=os.getenv("SEARCH_WORK_TYPE", "hybrid"),
             search_salary_min=int(os.getenv("SEARCH_SALARY_MIN", "70000")),
+            search_exclude_keywords=os.getenv("SEARCH_EXCLUDE_KEYWORDS", ""),
             max_jobs_per_run=int(os.getenv("MAX_JOBS_PER_RUN", "10")),
             cv_path=os.getenv("CV_PATH", "my_cv.pdf"),
             headless_browser=os.getenv("HEADLESS_BROWSER", "false").lower() == "true",
@@ -55,6 +60,9 @@ class Config:
             request_delay_max=float(os.getenv("REQUEST_DELAY_MAX", "5.0")),
             model=os.getenv("DEEPSEEK_MODEL", "deepseek-v4-flash"),
             document_model=os.getenv("DEEPSEEK_DOCUMENT_MODEL", "deepseek-v4-pro"),
+            telegram_bot_token=_require("TELEGRAM_BOT_TOKEN"),
+            telegram_chat_id=_require("TELEGRAM_CHAT_ID"),
+            review_timeout_seconds=int(os.getenv("REVIEW_TIMEOUT_SECONDS", "3600")),
         )
 
     def override(self, **kwargs) -> "Config":

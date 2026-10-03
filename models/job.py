@@ -12,6 +12,7 @@ class ApplicationStatus(str, Enum):
     APPLIED = "Applied"
     REJECTED = "Rejected"
     ERROR = "Error"
+    UNDECIDED = "Undecided"
 
 
 @dataclass

@@ -55,3 +55,11 @@ class SheetsAgent:
     def fill_manual_row(self, job: JobListing) -> None:
         """Write scraped job fields into the existing row identified by job.sheet_row."""
         sheets_tools.fill_manual_row(self.ws, job.sheet_row, job)
+
+    def get_undecided_jobs(self) -> list[JobListing]:
+        """Get all jobs with ApplicationStatus.UNDECIDED from the sheet."""
+        return sheets_tools.get_undecided_jobs(self.ws)
+
+    def delete_job_row(self, linkedin_job_id: str) -> bool:
+        """Delete a job row by LinkedIn Job ID, re-resolving row number for safety."""
+        return sheets_tools.delete_job_row(self.ws, linkedin_job_id)

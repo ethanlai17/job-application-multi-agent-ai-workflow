@@ -95,6 +95,8 @@ def update_job_row(ws: gspread.Worksheet, row: int, **fields):
 
 def job_already_tracked(ws: gspread.Worksheet, linkedin_job_id: str) -> bool:
     """Check if a LinkedIn job ID is already in the sheet."""
+    if not linkedin_job_id:
+        return False
     job_id_col = HEADERS.index("LinkedIn Job ID") + 1
     existing_ids = ws.col_values(job_id_col)
     return linkedin_job_id in existing_ids
@@ -162,3 +164,30 @@ def fill_manual_row(ws: gspread.Worksheet, row_num: int, job: JobListing) -> Non
             "LinkedIn Job ID": job.linkedin_job_id,
         },
     )
+
+
+def get_undecided_jobs(ws: gspread.Worksheet) -> list[JobListing]:
+    """Filter get_all_jobs(ws) by ApplicationStatus.UNDECIDED, preserving sheet_row."""
+    return [job for job in get_all_jobs(ws) if job.status == ApplicationStatus.UNDECIDED]
+
+
+def delete_job_row(ws: gspread.Worksheet, linkedin_job_id: str) -> bool:
+    """
+    Delete a job row by LinkedIn Job ID, re-resolving row number immediately before deletion.
+    
+    Returns True if a row was deleted, False if empty id or no matching row found.
+    Always re-reads fresh (never trust cached sheet_row) since prior deletions shift indices.
+    """
+    if not linkedin_job_id:
+        return False
+    
+    # Re-resolve the row by reading the "LinkedIn Job ID" column fresh
+    id_col = HEADERS.index("LinkedIn Job ID") + 1  # gspread is 1-based
+    col_values = ws.col_values(id_col)
+    
+    for row_num, val in enumerate(col_values, start=1):
+        if val == linkedin_job_id:
+            ws.delete_rows(row_num)  # gspread 1-based inclusive
+            return True
+    
+    return False
